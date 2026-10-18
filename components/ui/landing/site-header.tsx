@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { navLinks } from "@/lib/landing-content";
 import { BrandLogo } from "@/components/brand-logo";
+import Link from "next/link";
 
 export function SiteHeader() {
   return (
@@ -27,29 +28,29 @@ export function SiteHeader() {
           className="hidden items-center gap-8 text-sm font-medium text-stone-600 md:flex"
         >
           {navLinks.map((link) => (
-            <a
+            <Link
               key={link.href}
               href={link.href}
               className="transition-colors hover:text-forest-900"
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </nav>
 
         <div className="flex items-center gap-3 sm:gap-4">
-          <a
-            href="#desk-preview"
+          <Link
+            href="/auth"
             className="hidden px-3 py-2 text-sm font-semibold text-stone-700 transition-colors hover:text-forest-900 sm:inline-block"
           >
             লগইন
-          </a>
-          <a
+          </Link>
+          <Link
             href="#desk-preview"
             className="inline-flex items-center justify-center rounded-full bg-[#143628] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-forest-800 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-forest-800 focus:ring-offset-2 sm:text-sm"
           >
             ফ্রি ডেমো দেখুন
-          </a>
+          </Link>
 
           <Sheet>
             <SheetTrigger
@@ -72,27 +73,27 @@ export function SiteHeader() {
               </SheetHeader>
               <nav className="mt-6 flex flex-col gap-3 px-4">
                 {navLinks.map((link) => (
-                  <a
+                  <Link
                     key={link.href}
                     href={link.href}
                     className="rounded-lg px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-forest-900"
                   >
                     {link.label}
-                  </a>
+                  </Link>
                 ))}
                 <div className="mt-4 flex flex-col gap-2 pt-2 border-t border-stone-200">
-                  <a
-                    href="#desk-preview"
+                  <Link
+                    href="/auth"
                     className="rounded-lg px-3 py-2 text-center text-sm font-semibold text-stone-700 hover:bg-stone-100"
                   >
                     লগইন
-                  </a>
-                  <a
+                  </Link>
+                  <Link
                     href="#desk-preview"
                     className="flex items-center justify-center rounded-full bg-forest-900 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-forest-800"
                   >
                     ফ্রি ডেমো দেখুন
-                  </a>
+                  </Link>
                 </div>
               </nav>
             </SheetContent>

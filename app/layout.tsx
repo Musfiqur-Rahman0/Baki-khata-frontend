@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import {
   Hind_Siliguri,
   Newsreader,
@@ -6,6 +7,7 @@ import {
   Geist_Mono,
 } from "next/font/google";
 
+import StoreProvider from "@/app/StoreProvider";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -49,7 +51,15 @@ export default function RootLayout({
       className={`${newsreader.variable} ${plusJakartaSans.variable} ${hindSiliguri.variable} ${geistMono.variable} h-full scroll-smooth antialiased`}
     >
       <body className="flex min-h-screen flex-col bg-[#FAF8F5] text-[#232523] selection:bg-forest-900 selection:text-white">
-        {children}
+        <Suspense
+          fallback={
+            <main className="flex min-h-screen items-center justify-center text-sm text-foreground-muted">
+              খাতা লোড হচ্ছে...
+            </main>
+          }
+        >
+          <StoreProvider>{children}</StoreProvider>
+        </Suspense>
       </body>
     </html>
   );

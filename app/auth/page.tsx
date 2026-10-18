@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   BadgeCheck,
   BookOpen,
   Boxes,
-  Check,
   CheckCircle2,
   Cloud,
   Headphones,
@@ -24,7 +24,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { BrandLogo } from "@/components/brand-logo";
+import {
+  clearAuthError,
+  login,
+  register,
+  type BusinessType,
+} from "@/features/auth/authSlice";
+import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import Image from "next/image";
 
 type Mode = "register" | "login";
@@ -33,13 +39,44 @@ const CATEGORIES: {
   id: string;
   label: string;
   icon: LucideIcon;
+  businessType: BusinessType;
 }[] = [
-  { id: "grocery", label: "মুদি / গ্রোসারি", icon: ShoppingBag },
-  { id: "pharmacy", label: "ফার্মেসি", icon: Pill },
-  { id: "tailor", label: "কাপড় / দর্জি", icon: Shirt },
-  { id: "electronics", label: "ইলেকট্রনিক্স", icon: PlugZap },
-  { id: "restaurant", label: "রেস্তোরাঁ / ক্যাফে", icon: Utensils },
-  { id: "wholesale", label: "অন্যান্য ব্যবসা", icon: Boxes },
+  {
+    id: "grocery",
+    label: "মুদি / গ্রোসারি",
+    icon: ShoppingBag,
+    businessType: "GROCERY",
+  },
+  {
+    id: "pharmacy",
+    label: "ফার্মেসি",
+    icon: Pill,
+    businessType: "PHARMACY",
+  },
+  {
+    id: "tailor",
+    label: "কাপড় / দর্জি",
+    icon: Shirt,
+    businessType: "CLOTHING_TAILORING",
+  },
+  {
+    id: "electronics",
+    label: "ইলেকট্রনিক্স",
+    icon: PlugZap,
+    businessType: "ELECTRONICS",
+  },
+  {
+    id: "restaurant",
+    label: "রেস্তোরাঁ / ক্যাফে",
+    icon: Utensils,
+    businessType: "RESTAURANT_CAFE",
+  },
+  {
+    id: "wholesale",
+    label: "অন্যান্য ব্যবসা",
+    icon: Boxes,
+    businessType: "OTHER",
+  },
 ];
 
 function PinInput({
@@ -134,28 +171,61 @@ function Field({
 }
 
 export default function Page() {
-  const [mode, setMode] = useState<Mode>("login");
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const { status, error } = useAppSelector((state) => state.auth);
+  const [mode, setMode] = useState<Mode>("register");
   const [shopName, setShopName] = useState("রহমান জেনারেল স্টোর");
   const [category, setCategory] = useState(CATEGORIES[0].id);
-  const [toast, setToast] = useState<string | null>(null);
 
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);
-    setToast(null);
+    dispatch(clearAuthError());
   };
 
-  const handleRegistration = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleRegistration = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
-    setToast("অভিনন্দন! আপনার ডিজিটাল খাতা সফলভাবে তৈরি হয়েছে");
-    window.setTimeout(
-      () => window.scrollTo({ top: 0, behavior: "smooth" }),
-      1500,
+    const formData = new FormData(event.currentTarget);
+    const selectedCategory = CATEGORIES.find((item) => item.id === category);
+
+    if (!selectedCategory) {
+      return;
+    }
+
+    const result = await dispatch(
+      register({
+        name: String(formData.get("merchantName")),
+        shopName: String(formData.get("shopName")),
+        businessType: selectedCategory.businessType,
+        phone: String(formData.get("phone")),
+        pin: Array.from({ length: 6 }, (_, index) =>
+          String(formData.get(`reg-pin-${index + 1}`)),
+        ).join(""),
+      }),
     );
+
+    if (register.fulfilled.match(result)) {
+      router.replace("/onbording");
+    }
   };
 
-  const handleLogin = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setToast("সফলভাবে লগইন হয়েছে! খাতার ডেস্কে প্রবেশ করা হচ্ছে...");
+    const formData = new FormData(event.currentTarget);
+    const result = await dispatch(
+      login({
+        phone: String(formData.get("phone")),
+        pin: Array.from({ length: 6 }, (_, index) =>
+          String(formData.get(`login-pin-${index + 1}`)),
+        ).join(""),
+      }),
+    );
+
+    if (login.fulfilled.match(result)) {
+      router.replace("/onbording");
+    }
   };
 
   return (
@@ -313,14 +383,6 @@ export default function Page() {
                     </p>
                     <p className="text-sm font-bold text-primary">
                       {shopName.trim() || "আপনার দোকানের নাম"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-foreground-muted">
-                      ইউনিক আইডি
-                    </p>
-                    <p className="text-xs font-semibold text-secondary">
-                      #BK-৮৯২০
                     </p>
                   </div>
                 </div>
@@ -513,9 +575,10 @@ export default function Page() {
 
                 <button
                   type="submit"
+                  disabled={status === "loading"}
                   className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary shadow-sm transition hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
-                  দোকান তৈরি করুন
+                  {status === "loading" ? "তৈরি হচ্ছে..." : "দোকান তৈরি করুন"}
                   <ArrowRight aria-hidden="true" className="size-4" />
                 </button>
 
@@ -561,14 +624,8 @@ export default function Page() {
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-foreground">
-                      ৪-সংখ্যার গোপন পিন
+                      ৬-সংখ্যার গোপন পিন
                     </p>
-                    <a
-                      href="tel:16260"
-                      className="text-xs font-semibold text-secondary hover:underline"
-                    >
-                      পিন ভুলে গেছেন?
-                    </a>
                   </div>
                   <PinInput
                     name="login-pin"
@@ -589,10 +646,11 @@ export default function Page() {
 
                 <button
                   type="submit"
+                  disabled={status === "loading"}
                   className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-secondary px-5 py-3 text-sm font-bold text-on-secondary shadow-sm transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
                 >
                   <LogIn aria-hidden="true" className="size-4" />
-                  খাতায় প্রবেশ করুন
+                  {status === "loading" ? "প্রবেশ করা হচ্ছে..." : "খাতায় প্রবেশ করুন"}
                   <ArrowRight aria-hidden="true" className="size-4" />
                 </button>
 
@@ -609,17 +667,12 @@ export default function Page() {
               </form>
             )}
 
-            {toast && (
+            {error && (
               <div
-                role="status"
-                aria-live="polite"
-                className="mt-6 flex items-center gap-3 rounded-2xl bg-settled-bg p-4 text-sm font-semibold text-settled-fg"
+                role="alert"
+                className="mt-6 flex items-center gap-3 rounded-2xl bg-due-bg p-4 text-sm font-semibold text-due-fg"
               >
-                <Check
-                  aria-hidden="true"
-                  className="size-5 shrink-0 rounded-full bg-secondary p-0.5 text-on-secondary"
-                />
-                {toast}
+                {error}
               </div>
             )}
           </section>
