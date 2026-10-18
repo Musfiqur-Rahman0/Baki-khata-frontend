@@ -429,9 +429,9 @@ function DetailsPanel({
   return (
     <>
       <div className="flex items-start justify-between pb-1 border-b border-border">
-        <div className="flex items-center gap-2">
+        <div className="flex  gap-2">
           <div
-            className={`w-12 h-12 rounded-full ${TONES[cust.tone % 4].bg} ${TONES[cust.tone % 4].text} flex items-center justify-center font-bold text-headline-md shadow-sm`}
+            className={`w-12 h-12 aspect-square  rounded-full ${TONES[cust.tone % 4].bg} ${TONES[cust.tone % 4].text} flex items-center justify-center justify-center font-bold text-headline-md shadow-sm leading-1`}
           >
             {initialOf(cust.name)}
           </div>
@@ -594,13 +594,6 @@ function DetailsPanel({
           >
             <Icon name="chat" className="text-[16px]" />
             <span>হোয়াটসঅ্যাপে পাঠান</span>
-          </button>
-          <button
-            onClick={sendSms}
-            className="flex-1 py-2 px-3 rounded-full bg-secondary hover:bg-secondary/90 text-white font-semibold font-bold text-label-md flex items-center justify-center gap-1.5 shadow-sm transition-all"
-          >
-            <Icon name="send" className="text-[16px]" />
-            <span>মোবাইলে SMS পাঠান</span>
           </button>
         </div>
       </div>
@@ -1905,7 +1898,7 @@ function StorePageContent() {
                   </span>
                 </div>
                 <div className="h-4 w-px bg-surface-hover hidden md:block" />
-                <div className="flex items-center gap-1 text-foreground-muted font-semibold">
+                {/* <div className="flex items-center gap-1 text-foreground-muted font-semibold">
                   <Icon
                     name="cloud_sync"
                     className="text-[18px] text-primary"
@@ -1914,7 +1907,7 @@ function StorePageContent() {
                     অফলাইনে ডাটা এন্ট্রি হলেও নেট কানেকশন পাওয়া মাত্রই সার্ভারে
                     জমা হবে
                   </span>
-                </div>
+                </div> */}
               </div>
               <div className="flex items-center gap-1 text-label-md text-foreground-muted">
                 <span>যেকোনো সমস্যায় কল করুন:</span>
@@ -1936,12 +1929,6 @@ function StorePageContent() {
               </span>
             </div>
             <div className="h-4 w-px bg-surface-hover hidden md:block" />
-            <div className="flex items-center gap-1 text-foreground-muted">
-              <Icon name="wifi_off" className="text-[18px] text-tertiary" />
-              <span className="font-semibold text-label-md">
-                অফলাইন মোড প্রস্তুত (স্বয়ংক্রিয় ব্যাকআপ)
-              </span>
-            </div>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1 text-foreground-muted">
