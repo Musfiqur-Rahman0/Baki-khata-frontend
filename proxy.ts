@@ -5,7 +5,12 @@ export function proxy(request: NextRequest) {
     request.cookies.has("access_token") || request.cookies.has("refresh_token");
 
   if (!hasSession) {
-    return NextResponse.redirect(new URL("/auth", request.url));
+    const authUrl = new URL("/auth", request.url);
+    authUrl.searchParams.set(
+      "next",
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    );
+    return NextResponse.redirect(authUrl);
   }
 
   return NextResponse.next();

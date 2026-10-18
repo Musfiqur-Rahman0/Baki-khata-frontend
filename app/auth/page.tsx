@@ -177,6 +177,7 @@ export default function Page() {
   const [mode, setMode] = useState<Mode>("register");
   const [shopName, setShopName] = useState("রহমান জেনারেল স্টোর");
   const [category, setCategory] = useState(CATEGORIES[0].id);
+  const [loginPhone, setLoginPhone] = useState("");
 
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);
@@ -189,6 +190,7 @@ export default function Page() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const selectedCategory = CATEGORIES.find((item) => item.id === category);
+    const phone = String(formData.get("phone"));
 
     if (!selectedCategory) {
       return;
@@ -199,7 +201,7 @@ export default function Page() {
         name: String(formData.get("merchantName")),
         shopName: String(formData.get("shopName")),
         businessType: selectedCategory.businessType,
-        phone: String(formData.get("phone")),
+        phone,
         pin: Array.from({ length: 6 }, (_, index) =>
           String(formData.get(`reg-pin-${index + 1}`)),
         ).join(""),
@@ -207,7 +209,8 @@ export default function Page() {
     );
 
     if (register.fulfilled.match(result)) {
-      router.replace("/onbording");
+      setLoginPhone(phone);
+      switchMode("login");
     }
   };
 
@@ -224,7 +227,15 @@ export default function Page() {
     );
 
     if (login.fulfilled.match(result)) {
-      router.replace("/onbording");
+      const requestedPath = new URLSearchParams(window.location.search).get(
+        "next",
+      );
+      const destination =
+        requestedPath &&
+        /^\/(onbording|store)(?:[/?#]|$)/.test(requestedPath)
+          ? requestedPath
+          : "/onbording";
+      router.replace(destination);
     }
   };
 
@@ -616,6 +627,8 @@ export default function Page() {
                       maxLength={11}
                       required
                       placeholder="০১XXXXXXXXX"
+                      value={loginPhone}
+                      onChange={(event) => setLoginPhone(event.target.value)}
                       className="h-12 min-w-0 flex-1 rounded-xl border border-border bg-background px-4 text-sm text-foreground outline-none transition placeholder:text-foreground-muted/70 focus:border-secondary focus:ring-2 focus:ring-secondary/15"
                     />
                   </div>
