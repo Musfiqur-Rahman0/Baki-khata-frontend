@@ -46,7 +46,7 @@ export function SiteHeader() {
             লগইন
           </Link>
           <Link
-            href="#desk-preview"
+            href="/demo-store"
             className="inline-flex items-center justify-center rounded-full bg-[#143628] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-forest-800 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-forest-800 focus:ring-offset-2 sm:text-sm"
           >
             ফ্রি ডেমো দেখুন
@@ -89,7 +89,7 @@ export function SiteHeader() {
                     লগইন
                   </Link>
                   <Link
-                    href="#desk-preview"
+                    href="/demo-store"
                     className="flex items-center justify-center rounded-full bg-forest-900 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-forest-800"
                   >
                     ফ্রি ডেমো দেখুন

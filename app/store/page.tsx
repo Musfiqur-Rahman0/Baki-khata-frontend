@@ -8,6 +8,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
+import { toast as sonnerToast } from "sonner";
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -46,6 +48,8 @@ import {
 } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { BUSINESS_TYPE_LABELS } from "@/features/auth/authSlice";
+import { useAppSelector } from "@/lib/redux/hooks";
 
 /* ================================================================== */
 /* Types                                                               */
@@ -87,9 +91,10 @@ type FormState = {
 };
 
 const STORAGE_KEY = "bakhi-khata:customers:v1";
+const DEMO_STORAGE_KEY = "bakhi-khata:demo-customers:v1";
 const DRAFT_KEY = "bakhi-khata:draft:v1";
+const DEMO_DRAFT_KEY = "bakhi-khata:demo-draft:v1";
 const URGENT_DAYS = 15;
-const SHOP = "রহমান ব্রাদার্স গ্রোসারি";
 
 const TONES = [
   { bg: "bg-due-bg", text: "text-primary" },
@@ -180,10 +185,10 @@ const esc = (s: string) =>
       ]!,
   );
 
-const reminderText = (c: Customer) =>
-  `আসসালামু আলাইকুম ${c.name} ভাই, ${SHOP}তে আপনার খতিয়ানের বর্তমান মোট বকেয়া ${money(
+const reminderText = (c: Customer, shopName: string, ownerName: string) =>
+  `আসসালামু আলাইকুম ${c.name} ভাই, ${shopName}তে আপনার খতিয়ানের বর্তমান মোট বকেয়া ${money(
     c.totalDue,
-  )}। অনুগ্রহপূর্বক নিকটস্থ সুবিধাজনক সময়ে হিসাবটি সমন্বয় করার অনুরোধ জানাচ্ছি। ধন্যবাদ! - রহমান স্টোর`;
+  )}। অনুগ্রহপূর্বক নিকটস্থ সুবিধাজনক সময়ে হিসাবটি সমন্বয় করার অনুরোধ জানাচ্ছি। ধন্যবাদ! - ${ownerName}`;
 
 type SpeechRecognitionLike = {
   lang: string;
@@ -377,11 +382,17 @@ function Icon({ name, className = "" }: { name: string; className?: string }) {
 
 function DetailsPanel({
   cust,
+  shopName,
+  ownerName,
+  isDemo,
   flash,
   onOpenForm,
   notify,
 }: {
   cust: Customer;
+  shopName: string;
+  ownerName: string;
+  isDemo: boolean;
   flash: boolean;
   onOpenForm: (mode: Mode, c?: Customer) => void;
   notify: (m: string) => void;
@@ -390,7 +401,7 @@ function DetailsPanel({
     cust.creditLimit > 0
       ? Math.min(100, Math.round((cust.totalDue / cust.creditLimit) * 100))
       : 0;
-  const msg = reminderText(cust);
+  const msg = reminderText(cust, shopName, ownerName);
 
   const printReceipt = () => {
     const w = window.open("", "_blank", "width=420,height=640");
@@ -408,13 +419,17 @@ function DetailsPanel({
       .write(`<!doctype html><html lang="bn"><head><meta charset="utf-8"><title>রসিদ</title>
       <style>body{font-family:sans-serif;padding:20px;color:#1c1c19}h2{margin:0}table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
       td{padding:6px 0;border-bottom:1px dashed #ccc}.tot{font-size:20px;font-weight:700;margin-top:16px}</style></head><body>
-      <h2>${esc(SHOP)}</h2><p>গ্রাহক: <b>${esc(cust.name)}</b><br>মোবাইল: ${esc(cust.phone)}<br>তারিখ: ${esc(fmtDate(todayISO()))}</p>
+      <h2>${esc(shopName)}</h2><p>মালিক: ${esc(ownerName)}<br>গ্রাহক: <b>${esc(cust.name)}</b><br>মোবাইল: ${esc(cust.phone)}<br>তারিখ: ${esc(fmtDate(todayISO()))}</p>
       <table>${rows}</table><div class="tot">মোট বাকি: ${esc(money(cust.totalDue))}</div>
       <script>window.onload=()=>window.print()<\/script></body></html>`);
     w.document.close();
   };
 
   const sendWhatsapp = () => {
+    if (isDemo) {
+      sonnerToast.info("ডেমো মোডে কোনো বার্তা পাঠানো হয় না।");
+      return;
+    }
     window.open(
       `https://wa.me/${intlPhone(cust.phone)}?text=${encodeURIComponent(msg)}`,
       "_blank",
@@ -422,10 +437,6 @@ function DetailsPanel({
     );
     notify("হোয়াটসঅ্যাপ খোলা হয়েছে");
   };
-  const sendSms = () => {
-    window.location.href = `sms:${intlPhone(cust.phone)}?&body=${encodeURIComponent(msg)}`;
-  };
-
   return (
     <>
       <div className="flex items-start justify-between pb-1 border-b border-border">
@@ -620,6 +631,9 @@ function DetailsPanel({
 
 function FormPanel({
   form,
+  shopName,
+  ownerName,
+  isDemo,
   setForm,
   errors,
   target,
@@ -630,6 +644,9 @@ function FormPanel({
   notify,
 }: {
   form: FormState;
+  shopName: string;
+  ownerName: string;
+  isDemo: boolean;
   setForm: (f: FormState) => void;
   errors: Record<string, string>;
   target: Customer | undefined;
@@ -993,18 +1010,27 @@ function FormPanel({
         <input
           id="f-sms"
           type="checkbox"
-          checked={form.sendSms}
+          checked={isDemo ? false : form.sendSms}
+          disabled={isDemo}
           onChange={(e) => set({ sendSms: e.target.checked })}
           className="mt-1 w-4 h-4 rounded accent-secondary"
         />
-        <label htmlFor="f-sms" className="cursor-pointer">
+        <label
+          htmlFor="f-sms"
+          className="cursor-pointer"
+          onClick={() => {
+            if (isDemo) {
+              sonnerToast.info("ডেমো মোডে কোনো বার্তা পাঠানো হয় না।");
+            }
+          }}
+        >
           <span className="font-semibold text-label-lg font-bold text-secondary block leading-snug">
             কাস্টমারের মোবাইলে ফ্রি এসএমএস ও হোয়াটসঅ্যাপ রসিদ পাঠান
           </span>
           <span className="font-semibold text-label-md text-foreground-muted block mt-0.5">
-            অটোমেটিক বার্তা যাবে: “আসসালামু আলাইকুম {previewName} ভাই, {SHOP}তে
-            আপনার খতিয়ান সংরক্ষিত হয়েছে। পরিমাণ: ৳ {form.amount || "০"}।
-            ধন্যবাদ!”
+            {isDemo
+              ? "ডেমো মোডে SMS ও WhatsApp পাঠানো বন্ধ রাখা হয়েছে।"
+              : `অটোমেটিক বার্তা যাবে: “আসসালামু আলাইকুম ${previewName} ভাই, ${shopName}তে আপনার খতিয়ান সংরক্ষিত হয়েছে। পরিমাণ: ৳ ${form.amount || "০"}। ধন্যবাদ! - ${ownerName}”`}
           </span>
         </label>
       </div>
@@ -1016,7 +1042,9 @@ function FormPanel({
           className="w-full sm:flex-1 py-3.5 px-3 rounded-full bg-primary hover:bg-primary-hover text-on-primary font-semibold shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all"
         >
           <Icon name="save" className="text-[20px]" />
-          <span>খাতায় যোগ করুন ও রসিদ পাঠান</span>
+          <span>
+            {isDemo ? "ডেমো খাতায় যোগ করুন" : "খাতায় যোগ করুন ও রসিদ পাঠান"}
+          </span>
           <Icon name="arrow_forward" className="text-[18px]" />
         </button>
         <button
@@ -1036,6 +1064,22 @@ function FormPanel({
 /* ================================================================== */
 
 function StorePageContent() {
+  const pathname = usePathname();
+  const isDemo = pathname === "/demo-store";
+  const user = useAppSelector((state) => state.auth.user);
+  const shopName = isDemo ? "সোনালী বাজার" : user?.shopName ?? "আপনার দোকান";
+  const ownerName = isDemo ? "মোঃ আরিফুল ইসলাম" : user?.name ?? "দোকানদার";
+  const phone = isDemo ? "০১৭১২-৩৪৫৬৭৮" : user?.phone ?? "মোবাইল নম্বর নেই";
+  const businessType = isDemo
+    ? "মুদি / গ্রোসারি"
+    : user
+      ? BUSINESS_TYPE_LABELS[user.businessType]
+      : "ব্যবসার ধরন";
+  const merchantCode = isDemo
+    ? "DEMO01"
+    : user?.id.slice(0, 6).toUpperCase() ?? "------";
+  const storageKey = isDemo ? DEMO_STORAGE_KEY : STORAGE_KEY;
+  const draftKey = isDemo ? DEMO_DRAFT_KEY : DRAFT_KEY;
   const [customers, setCustomers] = useState<Customer[]>(() => makeSeed());
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState("CUST-001");
@@ -1052,7 +1096,7 @@ function StorePageContent() {
   /* ---- persistence ---- */
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw) as Customer[];
         if (Array.isArray(parsed) && parsed.length) {
@@ -1064,16 +1108,16 @@ function StorePageContent() {
       /* ignore corrupt storage */
     }
     setLoaded(true);
-  }, []);
+  }, [storageKey]);
 
   useEffect(() => {
     if (!loaded) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(customers));
+      localStorage.setItem(storageKey, JSON.stringify(customers));
     } catch {
       /* storage full / unavailable */
     }
-  }, [customers, loaded]);
+  }, [customers, loaded, storageKey]);
 
   /* ---- toast ---- */
   const notify = useCallback((msg: string) => {
@@ -1127,7 +1171,7 @@ function StorePageContent() {
       if (mode === "new_customer") {
         let f = emptyForm("new_customer");
         try {
-          const d = localStorage.getItem(DRAFT_KEY);
+          const d = localStorage.getItem(draftKey);
           if (d) {
             f = {
               ...f,
@@ -1135,7 +1179,7 @@ function StorePageContent() {
               mode,
               memoName: "",
             };
-            localStorage.removeItem(DRAFT_KEY);
+            localStorage.removeItem(draftKey);
             notify("সংরক্ষিত খসড়া ফিরিয়ে আনা হয়েছে");
           }
         } catch {
@@ -1161,7 +1205,7 @@ function StorePageContent() {
       }
       setView("form");
     },
-    [notify, selected],
+    [draftKey, notify, selected],
   );
 
   const switchTab = (m: Mode) => {
@@ -1299,7 +1343,7 @@ function StorePageContent() {
   const saveDraft = () => {
     try {
       const { memoName, ...rest } = form;
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(rest));
+      localStorage.setItem(draftKey, JSON.stringify(rest));
       notify("খসড়া সংরক্ষিত হয়েছে");
     } catch {
       notify("খসড়া সংরক্ষণ করা যায়নি");
@@ -1315,6 +1359,10 @@ function StorePageContent() {
     if (action === "pay") return openForm("add_paid", c);
     if (action === "add-due") return openForm("add_due", c);
     setView("details");
+    if (action === "sms" && isDemo) {
+      sonnerToast.info("ডেমো মোডে কোনো বার্তা পাঠানো হয় না।");
+      return;
+    }
     if (action === "sms") {
       setFlash(true);
       window.setTimeout(() => setFlash(false), 1500);
@@ -1382,24 +1430,6 @@ function StorePageContent() {
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <BrandLogo />
             <div className="h-6 w-px bg-surface-hover hidden sm:block" />
-            {/* <button
-              type="button"
-              className="flex items-center gap-1 px-3 py-1 rounded-full bg-surface-muted hover:bg-surface-muted transition-colors text-left"
-            >
-              <div className="w-2 h-2 rounded-full bg-secondary" />
-              <div className="flex flex-col">
-                <span className="font-semibold text-label-md text-foreground-muted leading-tight">
-                  দোকান
-                </span>
-                <span className="font-semibold text-label-lg text-foreground leading-tight">
-                  রহমান স্টোর
-                </span>
-              </div>
-              <Icon
-                name="expand_more"
-                className="text-foreground-muted text-[18px]"
-              />
-            </button> */}
           </div>
 
           <nav className="hidden xl:flex items-center gap-1 bg-background p-1 rounded-full">
@@ -1449,8 +1479,17 @@ function StorePageContent() {
               </span>
             </button> */}
             <div className="h-6 w-px bg-surface-hover hidden sm:block" />
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <Icon name="person" className="text-on-primary text-[18px]" />
+            <div className="hidden sm:block text-right">
+              <p className="font-semibold text-label-md text-foreground">
+                {ownerName}
+              </p>
+              <p className="text-label-md text-foreground-muted">{phone}</p>
+            </div>
+            <div
+              aria-label={ownerName}
+              className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-semibold"
+            >
+              {initialOf(ownerName)}
             </div>
           </div>
         </div>
@@ -1459,6 +1498,12 @@ function StorePageContent() {
       {/* ============================ MAIN ============================== */}
       <main className="w-full bg-background flex-1">
         <div className="mx-auto flex w-full max-w-6xl flex-col">
+          {isDemo && (
+            <div className="mx-4 mt-4 rounded-xl border border-rolling-fg/20 bg-rolling-bg px-4 py-3 text-sm font-semibold text-rolling-fg sm:mx-6 lg:mx-8">
+              আপনি নমুনা দোকান দেখছেন। এখানে করা পরিবর্তন শুধু এই ডেমোতেই
+              থাকবে, আর কোনো SMS বা WhatsApp বার্তা পাঠানো হবে না।
+            </div>
+          )}
           {/* Breadcrumb */}
           <div className="w-full px-4 sm:px-6 lg:px-8 pt-3 pb-2 flex items-center justify-between text-foreground-muted font-semibold">
             <div className="flex items-center gap-1 flex-wrap">
@@ -1466,7 +1511,7 @@ function StorePageContent() {
               <span className="text-foreground-muted">/</span>
               <span>ডিজিটাল খাতা</span>
               <span className="text-foreground-muted">/</span>
-              <span className="font-semibold text-foreground">{SHOP}</span>
+              <span className="font-semibold text-foreground">{shopName}</span>
               <span className="text-foreground-muted">/</span>
               <span
                 className={`px-1 py-0.5 rounded-full font-semibold text-label-md ${view === "form" ? "bg-due-bg text-primary" : "bg-settled-bg text-secondary"}`}
@@ -1501,7 +1546,7 @@ function StorePageContent() {
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="font-semibold text-headline-lg tracking-tight !text-white leading-tight">
-                      {SHOP}
+                      {shopName}
                     </h1>
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 text-on-secondary font-semibold text-label-md">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
@@ -1509,9 +1554,9 @@ function StorePageContent() {
                     </span>
                   </div>
                   <p className="font-semibold text-white/80 mt-0.5">
-                    ধানমন্ডি ব্রাঞ্চ, ঢাকা • ডিজিটাল লেজার আইডি:{" "}
+                    মালিক: {ownerName} • {phone} • {businessType} • মার্চেন্ট আইডি:{" "}
                     <span className="font-mono text-white font-bold">
-                      #BK-7842
+                      #BK-{merchantCode}
                     </span>
                   </p>
                 </div>
@@ -1777,8 +1822,8 @@ function StorePageContent() {
                               <>
                                 <button
                                   onClick={() => rowAction("sms", c)}
-                                  title="SMS তাগাদা পাঠান"
-                                  className="px-2 py-1 rounded-full bg-surface-muted text-settled-fg hover:bg-surface-muted text-label-md font-bold flex items-center gap-1 transition-all"
+                                  title={isDemo ? "ডেমো মোডে বার্তা পাঠানো বন্ধ" : "SMS তাগাদা পাঠান"}
+                                  className={`px-2 py-1 rounded-full bg-surface-muted text-settled-fg hover:bg-surface-muted text-label-md font-bold flex items-center gap-1 transition-all ${isDemo ? "opacity-70" : ""}`}
                                 >
                                   <Icon name="sms" className="text-[14px]" />
                                   <span>তাগাদা</span>
@@ -1837,7 +1882,7 @@ function StorePageContent() {
                     কাস্টমারকে তাৎক্ষণিক ফ্রি SMS পাঠান
                   </h5>
                   <p className="font-semibold text-body-md text-foreground-muted mt-0.5">
-                    প্রতিটি বাকি বা জমার পর আপনার দোকান ‘{SHOP}’ এর নামসহ ফ্রি
+                    প্রতিটি বাকি বা জমার পর আপনার দোকান ‘{shopName}’ এর নামসহ ফ্রি
                     মেসেজ চলে যায়। এতে কাস্টমার হিসাব নিয়ে স্বচ্ছ থাকে ও দ্রুত
                     টাকা আদায় হয়।
                   </p>
@@ -1850,6 +1895,9 @@ function StorePageContent() {
               {view === "form" ? (
                 <FormPanel
                   form={form}
+                  shopName={shopName}
+                  ownerName={ownerName}
+                  isDemo={isDemo}
                   setForm={setForm}
                   errors={errors}
                   target={selected}
@@ -1865,6 +1913,9 @@ function StorePageContent() {
               ) : selected ? (
                 <DetailsPanel
                   cust={selected}
+                  shopName={shopName}
+                  ownerName={ownerName}
+                  isDemo={isDemo}
                   flash={flash}
                   onOpenForm={openForm}
                   notify={notify}

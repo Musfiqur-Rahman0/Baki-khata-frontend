@@ -43,6 +43,8 @@ import {
 } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { BUSINESS_TYPE_LABELS } from "@/features/auth/authSlice";
+import { useAppSelector } from "@/lib/redux/hooks";
 
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
@@ -266,6 +268,13 @@ const CUSTOMERS = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const user = useAppSelector((state) => state.auth.user);
+  const shopName = user?.shopName ?? "আপনার দোকান";
+  const ownerName = user?.name ?? "দোকানদার";
+  const businessType = user
+    ? BUSINESS_TYPE_LABELS[user.businessType]
+    : "ব্যবসার ধরন";
+  const merchantCode = user?.id.slice(0, 6).toUpperCase() ?? "------";
   const [view, setView] = useState<View>("welcome");
   const [modalOpen, setModalOpen] = useState(false);
   const [demo, setDemo] = useState(false);
@@ -355,10 +364,10 @@ export default function OnboardingPage() {
             <div className="hidden items-center gap-2 sm:flex">
               <div className="flex flex-col text-right">
                 <span className="text-label-lg font-semibold text-foreground">
-                  মেসার্স আলম স্টোর
+                  {shopName}
                 </span>
                 <span className="text-label-md font-medium text-secondary">
-                  যাচাইকৃত মার্চেন্ট
+                  {ownerName}
                 </span>
               </div>
               <div className="flex size-8 items-center justify-center rounded-full bg-primary text-on-primary">
@@ -391,15 +400,18 @@ export default function OnboardingPage() {
                 <div className="space-y-0.5">
                   <div className="flex flex-wrap items-center gap-1">
                     <h1 className="font-bold text-headline-md text-foreground">
-                      রহমান জেনারেল স্টোর
+                      {shopName}
                     </h1>
                     <span className="bg-surface-muted px-1 py-0.5 rounded-full font-medium text-label-md text-foreground-muted font-mono">
-                      #BK-9104
+                      #BK-{merchantCode}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-normal text-body-md text-foreground-muted">
                     <span>
-                      প্রোপাইটার: <strong>মোঃ হাফিজুর রহমান</strong>
+                      প্রোপাইটার: <strong>{ownerName}</strong>
+                    </span>
+                    <span>
+                      ব্যবসার ধরন: <strong>{businessType}</strong>
                     </span>
                     <span className="inline-flex items-center gap-1 text-secondary font-medium">
                       <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
@@ -449,7 +461,7 @@ export default function OnboardingPage() {
                     স্মার্ট খাতা শুভ সূচনা
                   </div>
                   <h2 className="font-bold text-headline-lg text-foreground">
-                    স্বাগতম হাফিজুর সাহেব! আপনার ডিজিটাল খাতার নতুন যাত্রা শুরু
+                    স্বাগতম, {ownerName}! আপনার ডিজিটাল খাতার নতুন যাত্রা শুরু
                     হলো 🎉
                   </h2>
                   <p className="font-normal text-body-lg text-foreground-muted leading-relaxed">
@@ -664,6 +676,13 @@ export default function OnboardingPage() {
                         ? "ডেমো বন্ধ করুন (স্বাভাবিক খাতা)"
                         : "নমুনা ডেটা দেখুন (ডেমো অন)"}
                     </button>
+                    <button
+                      onClick={() => router.push("/demo-store")}
+                      className="inline-flex items-center gap-2 px-4 py-3 rounded-full border border-border bg-background text-foreground font-semibold text-label-lg transition-colors hover:bg-surface-muted"
+                    >
+                      <Icon name="storefront" className="text-[18px]" />
+                      ডেমো দোকান খুলুন
+                    </button>
                     <span className="font-medium text-label-md text-foreground-muted">
                       * আপনার নিজস্ব শূন্য খাতার ওপর কোনো প্রভাব পড়বে না
                     </span>
@@ -824,7 +843,7 @@ export default function OnboardingPage() {
                 <div>
                   <div className="flex flex-wrap items-center gap-1">
                     <h1 className="font-bold text-headline-md text-foreground">
-                      রহমান জেনারেল স্টোর • মূল খতিয়ান
+                      {shopName} • মূল খতিয়ান
                     </h1>
                     <span className="bg-settled-bg text-settled-fg px-1 py-0.5 rounded-full font-medium text-label-md font-semibold">
                       দোকান সক্রিয়

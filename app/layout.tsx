@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { Toaster } from "sonner";
 import {
   Hind_Siliguri,
   Newsreader,
@@ -60,6 +61,7 @@ export default function RootLayout({
         >
           <StoreProvider>{children}</StoreProvider>
         </Suspense>
+        <Toaster position="bottom-right" richColors />
       </body>
     </html>
   );

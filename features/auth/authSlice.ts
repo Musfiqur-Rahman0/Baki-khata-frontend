@@ -11,6 +11,15 @@ export const BUSINESS_TYPES = [
 
 export type BusinessType = (typeof BUSINESS_TYPES)[number];
 
+export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
+  GROCERY: "মুদি / গ্রোসারি",
+  PHARMACY: "ফার্মেসি",
+  CLOTHING_TAILORING: "কাপড় / দর্জি",
+  ELECTRONICS: "ইলেকট্রনিক্স",
+  RESTAURANT_CAFE: "রেস্তোরাঁ / ক্যাফে",
+  OTHER: "অন্যান্য ব্যবসা",
+};
+
 export type AuthUser = {
   id: string;
   name: string;
@@ -40,12 +49,14 @@ type AuthResponse = {
 type AuthState = {
   user: AuthUser | null;
   status: "idle" | "loading" | "authenticated" | "failed";
+  sessionLoading: boolean;
   error: string | null;
 };
 
 const initialState: AuthState = {
   user: null,
   status: "idle",
+  sessionLoading: false,
   error: null,
 };
 
@@ -146,6 +157,47 @@ async function requestAuth(
   return responseBody.data.user;
 }
 
+export const loadCurrentUser = createAsyncThunk<
+  AuthUser,
+  void,
+  { rejectValue: string; state: { auth: AuthState } }
+>(
+  "auth/loadCurrentUser",
+  async (_, thunkApi) => {
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/auth/me`, {
+        credentials: "include",
+      });
+    } catch {
+      return thunkApi.rejectWithValue(
+        "সার্ভারের সাথে সংযোগ করা যাচ্ছে না। ইন্টারনেট সংযোগ পরীক্ষা করুন।",
+      );
+    }
+
+    let responseBody: unknown;
+    try {
+      responseBody = await response.json();
+    } catch {
+      return thunkApi.rejectWithValue("সার্ভার থেকে সঠিক উত্তর পাওয়া যায়নি।");
+    }
+
+    if (!response.ok || !isAuthResponse(responseBody)) {
+      return thunkApi.rejectWithValue(
+        getErrorMessage(responseBody) ?? "ব্যবহারকারীর তথ্য পাওয়া যায়নি।",
+      );
+    }
+
+    return responseBody.data.user;
+  },
+  {
+    condition: (_, { getState }) => {
+      const auth = getState().auth;
+      return !auth.user && !auth.sessionLoading;
+    },
+  },
+);
+
 export const login = createAsyncThunk<
   AuthUser,
   LoginInput,
@@ -188,6 +240,17 @@ const authSlice = createSlice({
   },
   extraReducers(builder) {
     builder
+      .addCase(loadCurrentUser.pending, (state) => {
+        state.sessionLoading = true;
+      })
+      .addCase(loadCurrentUser.fulfilled, (state, action) => {
+        state.sessionLoading = false;
+        state.status = "authenticated";
+        state.user = action.payload;
+      })
+      .addCase(loadCurrentUser.rejected, (state) => {
+        state.sessionLoading = false;
+      })
       .addCase(login.pending, (state) => {
         state.status = "loading";
         state.error = null;
