@@ -5,7 +5,9 @@ import { deskPreviewData } from "@/lib/landing-content";
 
 export function PreviewSection() {
   const [quickInput, setQuickInput] = useState("");
-  const [activeMessageCustomer, setActiveMessageCustomer] = useState<string | null>(null);
+  const [activeMessageCustomer, setActiveMessageCustomer] = useState<
+    string | null
+  >(null);
   const [copied, setCopied] = useState(false);
   const [newEntryToast, setNewEntryToast] = useState<string | null>(null);
 
@@ -51,13 +53,13 @@ export function PreviewSection() {
         {/* Desktop Mockup Container */}
         <div className="overflow-hidden rounded-2xl border border-stone-300 bg-[#FAF8F5] shadow-card-lift">
           {/* Mock Header Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-forest-950 bg-forest-900 px-5 py-4 text-white sm:px-7">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-forest-950 bg-[#143628] px-5 py-4 text-white sm:px-7">
             <div className="flex items-center gap-3">
-              <div className="flex size-8 items-center justify-center rounded-lg border border-forest-700 bg-forest-800 font-serif text-sm font-bold text-amber-200">
+              <div className="flex size-8 items-center justify-center rounded-lg border border-forest-700 bg-[#143628]/90 font-serif text-sm font-bold text-amber-200">
                 রব
               </div>
               <div>
-                <h3 className="text-sm font-semibold leading-tight sm:text-base">
+                <h3 className="text-sm font-semibold leading-tight !text-white sm:text-base">
                   {deskPreviewData.shopName}
                 </h3>
                 <p className="text-[11px] text-stone-300">
@@ -105,7 +107,7 @@ export function PreviewSection() {
               return (
                 <div
                   key={metric.label}
-                  className="rounded-xl border border-stone-200 bg-[#FAF8F5] p-4"
+                  className="rounded-2xl border border-stone-200 bg-[#FAF8F5] p-4"
                 >
                   <span
                     className={`block text-[11px] font-semibold uppercase tracking-wider ${
@@ -120,8 +122,8 @@ export function PreviewSection() {
                         isRose
                           ? "text-rose-700"
                           : metric.tone === "forest"
-                          ? "text-forest-950"
-                          : "text-stone-800"
+                            ? "text-forest-950"
+                            : "text-stone-800"
                       }`}
                     >
                       {metric.amount}
@@ -227,8 +229,8 @@ export function PreviewSection() {
                         isOverdue
                           ? "font-bold text-rose-700"
                           : isSettled
-                          ? "font-semibold text-stone-400"
-                          : "font-bold text-stone-900"
+                            ? "font-semibold text-stone-400"
+                            : "font-bold text-stone-900"
                       }`}
                     >
                       {entry.amount}
@@ -238,7 +240,9 @@ export function PreviewSection() {
                       {!entry.isSettled ? (
                         <button
                           type="button"
-                          onClick={() => openReminderModal(entry.name, entry.amount)}
+                          onClick={() =>
+                            openReminderModal(entry.name, entry.amount)
+                          }
                           className="inline-flex items-center gap-1 rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 shadow-xs transition hover:bg-stone-100 active:scale-95"
                         >
                           <svg
@@ -254,7 +258,9 @@ export function PreviewSection() {
                         <button
                           type="button"
                           onClick={() => {
-                            setNewEntryToast(`${entry.name}-এর সম্পূর্ণ পরিশোধিত হিসাব প্রদর্শিত`);
+                            setNewEntryToast(
+                              `${entry.name}-এর সম্পূর্ণ পরিশোধিত হিসাব প্রদর্শিত`,
+                            );
                             setTimeout(() => setNewEntryToast(null), 3000);
                           }}
                           className="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-600 transition hover:bg-stone-100 active:scale-95"
@@ -301,8 +307,9 @@ export function PreviewSection() {
                 <p className="italic text-stone-600">
                   "আসসালামু আলাইকুম। আশা করি ভালো আছেন। রহমান ব্রাদার্স গ্রোসারি
                   থেকে জানাচ্ছি যে আপনার খাতার মোট বকেয়া টাকার পরিমাণ{" "}
-                  {activeMessageCustomer.split("(")[1]?.replace(")", "") || "৳ ৬৫০"}।
-                  সুবিধাজনক সময়ে পরিশোধ করলে কৃতজ্ঞ থাকব। ধন্যবাদ।"
+                  {activeMessageCustomer.split("(")[1]?.replace(")", "") ||
+                    "৳ ৬৫০"}
+                  । সুবিধাজনক সময়ে পরিশোধ করলে কৃতজ্ঞ থাকব। ধন্যবাদ।"
                 </p>
               </div>
               <div className="mt-5 flex items-center justify-end gap-3">

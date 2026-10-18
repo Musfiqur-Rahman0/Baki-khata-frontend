@@ -1,4 +1,6 @@
 import { ctaData } from "@/lib/landing-content";
+import { Button } from "../button";
+import Link from "next/link";
 
 export function CtaSection() {
   return (
@@ -7,7 +9,7 @@ export function CtaSection() {
       data-purpose="bottom-cta"
     >
       <div className="relative z-10 mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto mb-6 flex size-12 items-center justify-center rounded-2xl border border-stone-200 bg-[#F5EFE6] text-forest-900 shadow-sm">
+        <div className="mx-auto mb-6 flex size-12 items-center justify-center rounded-full border border-stone-200 bg-[#F5EFE6] text-forest-900 shadow-sm">
           <svg
             className="size-6 text-forest-900"
             fill="none"
@@ -31,12 +33,12 @@ export function CtaSection() {
         </p>
 
         <div className="mt-8 flex flex-col items-center justify-center gap-3.5 sm:flex-row sm:gap-4">
-          <a
+          <Link
             href="#desk-preview"
-            className="w-full sm:w-auto inline-flex items-center justify-center rounded-full bg-terracotta-600 px-8 py-3.5 text-base font-semibold text-white shadow-float transition duration-200 hover:bg-terracotta-700 hover:shadow-card-lift focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:ring-offset-2"
+            className="w-full sm:w-auto inline-flex items-center justify-center rounded-full bg-terracotta-600 px-8 py-3.5 text-base font-semibold text-white shadow-float transition duration-200 hover:bg-terracotta-700 hover:shadow-card-lift focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:ring-offset-2 bg-[#b84c25]"
           >
             {ctaData.primaryBtn}
-          </a>
+          </Link>
           <a
             href="#desk-preview"
             className="w-full sm:w-auto inline-flex items-center justify-center rounded-full border border-stone-300 bg-[#FAF8F5] px-7 py-3.5 text-base font-semibold text-stone-800 shadow-sm transition duration-200 hover:bg-[#F5EFE6]"
@@ -45,9 +47,7 @@ export function CtaSection() {
           </a>
         </div>
 
-        <p className="mt-6 text-xs text-stone-500">
-          {ctaData.disclaimer}
-        </p>
+        <p className="mt-6 text-xs text-stone-500">{ctaData.disclaimer}</p>
       </div>
     </section>
   );

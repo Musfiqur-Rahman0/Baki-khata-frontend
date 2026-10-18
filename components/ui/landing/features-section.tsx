@@ -95,7 +95,7 @@ export function FeaturesSection() {
               key={feature.id}
               className="rounded-2xl border border-stone-200 bg-white p-7 shadow-subtle transition-all hover:border-stone-300"
             >
-              <div className="mb-5 flex size-10 items-center justify-center rounded-xl bg-forest-900 text-amber-200">
+              <div className="mb-5 flex size-10 items-center justify-center rounded-xl bg-[#143628] text-amber-200">
                 {getFeatureIcon(feature.iconType)}
               </div>
               <h3 className="font-serif-title mb-2 text-xl font-bold text-forest-950">

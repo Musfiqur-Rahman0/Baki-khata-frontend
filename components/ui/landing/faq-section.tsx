@@ -21,7 +21,7 @@ export function FaqSection() {
           {faqData.items.map((item) => (
             <div
               key={item.question}
-              className="rounded-xl border border-stone-200 bg-white p-6 shadow-subtle transition-all duration-200 hover:border-stone-300"
+              className="rounded-2xl border border-stone-200 bg-white p-6 shadow-subtle transition-all duration-200 hover:border-stone-300"
             >
               <h3 className="font-serif-title mb-2 text-lg font-bold text-forest-950">
                 {item.question}
