@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   BadgeCheck,
@@ -172,9 +172,12 @@ function Field({
 
 export default function Page() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const { status, error } = useAppSelector((state) => state.auth);
-  const [mode, setMode] = useState<Mode>("register");
+  const [mode, setMode] = useState<Mode>(
+    searchParams.has("next") ? "login" : "register",
+  );
   const [shopName, setShopName] = useState("রহমান জেনারেল স্টোর");
   const [category, setCategory] = useState(CATEGORIES[0].id);
   const [loginPhone, setLoginPhone] = useState("");
@@ -227,9 +230,7 @@ export default function Page() {
     );
 
     if (login.fulfilled.match(result)) {
-      const requestedPath = new URLSearchParams(window.location.search).get(
-        "next",
-      );
+      const requestedPath = searchParams.get("next");
       const destination =
         requestedPath && /^\/(onbording|store)(?:[/?#]|$)/.test(requestedPath)
           ? requestedPath

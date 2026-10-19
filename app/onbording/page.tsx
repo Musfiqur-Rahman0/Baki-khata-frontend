@@ -44,6 +44,7 @@ import {
 
 import { BrandLogo } from "@/components/brand-logo";
 import { AccountMenu } from "@/components/account-menu";
+import { SessionGate } from "@/components/auth/session-gate";
 import { BUSINESS_TYPE_LABELS } from "@/features/auth/authSlice";
 import {
   createCustomerRecord,
@@ -293,9 +294,17 @@ function mapCustomers(customers: CustomerWithBalance[]): OnboardingCustomer[] {
 /* ------------------------------------------------------------------ */
 
 export default function OnboardingPage() {
+  return (
+    <SessionGate>
+      <OnboardingContent />
+    </SessionGate>
+  );
+}
+
+function OnboardingContent() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, sessionResolved } = useAppSelector((state) => state.auth);
+  const { user } = useAppSelector((state) => state.auth);
   const shopName = user?.shopName ?? "আপনার দোকান";
   const ownerName = user?.name ?? "দোকানদার";
   const businessType = user
@@ -356,12 +365,10 @@ export default function OnboardingPage() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (!sessionResolved) return;
     if (!user) return;
 
-    let cancelled = false;
-    refreshLiveData().catch((error: unknown) => {
-      if (!cancelled) {
+    const timeout = window.setTimeout(() => {
+      void refreshLiveData().catch((error: unknown) => {
         setDataError(
           typeof error === "string"
             ? error
@@ -369,13 +376,13 @@ export default function OnboardingPage() {
               ? error.message
               : "দোকানের তথ্য লোড করা যায়নি",
         );
-      }
+      });
     });
 
     return () => {
-      cancelled = true;
+      window.clearTimeout(timeout);
     };
-  }, [refreshLiveData, sessionResolved, user]);
+  }, [refreshLiveData, user]);
 
   const switchView = (v: View) => {
     setView(v);
@@ -383,10 +390,6 @@ export default function OnboardingPage() {
   };
 
   const saveCustomer = async () => {
-    if (!sessionResolved) {
-      notify("আপনার সেশন যাচাই করা হচ্ছে, একটু অপেক্ষা করুন");
-      return;
-    }
     const name = cust.name.trim();
     const phone = cust.phone.trim();
     if (!name) return notify("দয়া করে গ্রাহকের নাম লিখুন");
@@ -436,10 +439,6 @@ export default function OnboardingPage() {
   };
 
   const saveQuickEntry = async () => {
-    if (!sessionResolved) {
-      notify("আপনার সেশন যাচাই করা হচ্ছে, একটু অপেক্ষা করুন");
-      return;
-    }
     const amount = Number(
       quickEntry.amount.replace(/[০-৯]/g, (digit) =>
         String("০১২৩৪৫৬৭৮৯".indexOf(digit)),
@@ -543,10 +542,6 @@ export default function OnboardingPage() {
   };
 
   const openAddCustomer = () => {
-    if (!sessionResolved) {
-      notify("আপনার সেশন যাচাই করা হচ্ছে, একটু অপেক্ষা করুন");
-      return;
-    }
     setModalOpen(true);
   };
 
@@ -555,10 +550,6 @@ export default function OnboardingPage() {
       "বাকি খাতা ২-মিনিটের ভিডিও গাইড লোড হচ্ছে। ইন্টারনেটের প্রয়োজন হবে।",
     );
   const openQuickEntry = () => {
-    if (!sessionResolved) {
-      notify("আপনার সেশন যাচাই করা হচ্ছে, একটু অপেক্ষা করুন");
-      return;
-    }
     if (!customers.length) {
       notify("কুইক এন্ট্রির আগে একজন কাস্টমার যোগ করুন");
       setModalOpen(true);
@@ -578,7 +569,7 @@ export default function OnboardingPage() {
   const owingCustomers = customers.filter(
     (customer) => customer.due > 0,
   ).length;
-  const demoView = sessionResolved && !user;
+  const demoView = !user;
   const completedSteps =
     Number(customers.length > 0) +
     Number(transactionCount > 0) +
@@ -633,11 +624,6 @@ export default function OnboardingPage() {
         {/* ------------------------- WELCOME VIEW ------------------------- */}
         {view === "welcome" && (
           <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-            {!sessionResolved && (
-              <div className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-foreground-muted">
-                সেশন যাচাই করা হচ্ছে...
-              </div>
-            )}
             {demoView && (
               <div className="rounded-xl border border-rolling-fg/20 bg-rolling-bg px-4 py-3 text-sm font-semibold text-rolling-fg">
                 ডেমো মোড: এখানে যোগ করা গ্রাহক ও লেনদেন শুধু এই পেজে থাকবে; কোনো
