@@ -92,7 +92,7 @@ export function AiEntryPanel({
           rows={4}
           maxLength={4000}
           placeholder="যেমন: রহিমকে ১২০০ টাকার চাল বাকিতে দিলাম, করিম ৫০০ টাকা জমা দিল"
-          className="w-full resize-y rounded-xl border border-border bg-surface p-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+          className="w-full resize-y rounded-2xl border border-border bg-surface p-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         />
         <button type="button" disabled={parsing} onClick={parse} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-secondary px-4 py-3 font-semibold text-on-secondary disabled:cursor-not-allowed disabled:opacity-60">
           {parsing ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
