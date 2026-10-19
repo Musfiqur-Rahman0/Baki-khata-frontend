@@ -231,8 +231,7 @@ export default function Page() {
         "next",
       );
       const destination =
-        requestedPath &&
-        /^\/(onbording|store)(?:[/?#]|$)/.test(requestedPath)
+        requestedPath && /^\/(onbording|store)(?:[/?#]|$)/.test(requestedPath)
           ? requestedPath
           : "/onbording";
       router.replace(destination);
@@ -287,7 +286,7 @@ export default function Page() {
               type="button"
               aria-pressed={mode === "register"}
               onClick={() => switchMode("register")}
-              className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-semibold transition ${
+              className={`cursor-pointer flex min-h-10 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-semibold transition ${
                 mode === "register"
                   ? "bg-primary text-on-primary shadow-sm"
                   : "text-foreground-muted hover:text-foreground"
@@ -300,7 +299,7 @@ export default function Page() {
               type="button"
               aria-pressed={mode === "login"}
               onClick={() => switchMode("login")}
-              className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-semibold transition ${
+              className={`cursor-pointer  flex min-h-10 flex-1 items-center justify-center gap-2 rounded-full px-3 text-xs font-semibold transition ${
                 mode === "login"
                   ? "bg-secondary text-on-secondary shadow-sm"
                   : "text-foreground-muted hover:text-foreground"
@@ -516,7 +515,7 @@ export default function Page() {
                           type="button"
                           aria-pressed={selected}
                           onClick={() => setCategory(id)}
-                          className={`flex min-h-[54px] items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
+                          className={`cursor-pointer  flex min-h-[54px] items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
                             selected
                               ? "border-primary/30 bg-primary/5 text-primary"
                               : "border-border bg-background text-foreground-muted hover:border-border-strong hover:bg-surface-hover"
@@ -587,7 +586,7 @@ export default function Page() {
                 <button
                   type="submit"
                   disabled={status === "loading"}
-                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary shadow-sm transition hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  className="cursor-pointer  flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary shadow-sm transition hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
                   {status === "loading" ? "তৈরি হচ্ছে..." : "দোকান তৈরি করুন"}
                   <ArrowRight aria-hidden="true" className="size-4" />
@@ -598,7 +597,7 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={() => switchMode("login")}
-                    className="font-semibold text-secondary hover:underline"
+                    className="cursor-pointer  font-semibold text-secondary hover:underline"
                   >
                     লগইন করুন
                   </button>
@@ -660,10 +659,12 @@ export default function Page() {
                 <button
                   type="submit"
                   disabled={status === "loading"}
-                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-secondary px-5 py-3 text-sm font-bold text-on-secondary shadow-sm transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+                  className="cursor-pointer  flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-secondary px-5 py-3 text-sm font-bold text-on-secondary shadow-sm transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
                 >
                   <LogIn aria-hidden="true" className="size-4" />
-                  {status === "loading" ? "প্রবেশ করা হচ্ছে..." : "খাতায় প্রবেশ করুন"}
+                  {status === "loading"
+                    ? "প্রবেশ করা হচ্ছে..."
+                    : "খাতায় প্রবেশ করুন"}
                   <ArrowRight aria-hidden="true" className="size-4" />
                 </button>
 
@@ -672,7 +673,7 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={() => switchMode("register")}
-                    className="font-semibold text-primary hover:underline"
+                    className="cursor-pointer  font-semibold text-primary hover:underline"
                   >
                     বিনামূল্যে নিবন্ধন করুন
                   </button>

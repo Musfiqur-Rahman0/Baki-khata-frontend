@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -43,8 +43,18 @@ import {
 } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { AccountMenu } from "@/components/account-menu";
 import { BUSINESS_TYPE_LABELS } from "@/features/auth/authSlice";
-import { useAppSelector } from "@/lib/redux/hooks";
+import {
+  createCustomerRecord,
+  fetchAllCustomers,
+  type CustomerWithBalance,
+} from "@/features/customers/customerSlice";
+import {
+  createTransactionRecord,
+  fetchAllTransactions,
+} from "@/features/transactions/transactionSlice";
+import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
@@ -113,11 +123,13 @@ function SmsButton({
   onSend,
   className,
   small,
+  label,
 }: {
   status?: "sending" | "done";
   onSend: () => void;
   className: string;
   small?: boolean;
+  label?: string;
 }) {
   const size = small ? "text-[16px]" : "text-[18px]";
 
@@ -126,7 +138,7 @@ function SmsButton({
       type="button"
       disabled={!!status}
       onClick={onSend}
-      className={`${className} ${status === "done" ? "!bg-primary" : ""}`}
+      className={`${className} ${status === "done" ? "!bg-primary" : ""} cursor-pointer `}
     >
       <Icon
         name={
@@ -142,7 +154,7 @@ function SmsButton({
         ? "পাঠানো হচ্ছে..."
         : status === "done"
           ? "সফল!"
-          : "হোয়াটসঅ্যাপ তাগাদা পরখ করুন"}
+          : (label ?? "হোয়াটসঅ্যাপ তাগাদা পাঠান")}
     </button>
   );
 }
@@ -229,38 +241,52 @@ const METRICS = [
   },
 ];
 
-const CUSTOMERS = [
+type OnboardingCustomer = {
+  id: string;
+  name: string;
+  phone: string;
+  due: number;
+  note: string;
+};
+
+const DEMO_CUSTOMERS: OnboardingCustomer[] = [
   {
-    initial: "হ",
-    avatar: "bg-due-bg text-primary",
+    id: "demo-kamal",
     name: "হাজী কামাল উদ্দিন",
     phone: "০১৮১৭-XXXXXX",
     note: "শেষ কেনাকাটা: গতকাল (চাল, তেল ও ডাল)",
-    amount: "৳ ৩,৪৫০ বাকি",
-    tag: "১০ দিন বাকি",
-    tagClass: "text-secondary",
+    due: 3450,
   },
   {
-    initial: "ত",
-    avatar: "bg-settled-bg text-secondary",
+    id: "demo-tarek",
     name: "তারেক মাস্টার",
     phone: "০১৯১২-XXXXXX",
     note: "আজ সকালে ১,০০০ টাকা পরিশোধ করেছেন",
-    amount: "৳ ১,১৫০ বাকি",
-    tag: "নিয়মিত খরিদ্দার",
-    tagClass: "text-foreground-muted",
+    due: 1150,
   },
   {
-    initial: "ম",
-    avatar: "bg-rolling-bg text-tertiary",
+    id: "demo-mostafa",
     name: "মোস্তফা ড্রাইভার",
     phone: "০১৭৫৫-XXXXXX",
     note: "শেষ এন্ট্রি: ৪ দিন আগে (চা-নাশতা)",
-    amount: "৳ ৬২০ বাকি",
-    tag: "তাগাদা পাঠানো প্রয়োজন",
-    tagClass: "text-primary font-semibold",
+    due: 620,
   },
 ];
+
+const DEMO_PAYMENT_TODAY = 8550;
+
+const formatTaka = (amount: number) =>
+  `৳ ${amount.toLocaleString("bn-BD", { maximumFractionDigits: 2 })}`;
+
+function mapCustomers(customers: CustomerWithBalance[]): OnboardingCustomer[] {
+  return customers.map(({ customer, balance }) => ({
+    id: customer.id,
+    name: customer.name,
+    phone: customer.phone,
+    due: Number(balance.due) || 0,
+    note: customer.note || "খতিয়ান সক্রিয়",
+  }));
+}
 
 /* ------------------------------------------------------------------ */
 /* Page                                                                */
@@ -268,7 +294,8 @@ const CUSTOMERS = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const user = useAppSelector((state) => state.auth.user);
+  const dispatch = useAppDispatch();
+  const { user, sessionResolved } = useAppSelector((state) => state.auth);
   const shopName = user?.shopName ?? "আপনার দোকান";
   const ownerName = user?.name ?? "দোকানদার";
   const businessType = user
@@ -277,56 +304,286 @@ export default function OnboardingPage() {
   const merchantCode = user?.id.slice(0, 6).toUpperCase() ?? "------";
   const [view, setView] = useState<View>("welcome");
   const [modalOpen, setModalOpen] = useState(false);
+  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
   const [demo, setDemo] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [sms, setSms] = useState<Record<string, "sending" | "done">>({});
-  const [cust, setCust] = useState({ name: "", phone: "", balance: "" });
+  const [demoCustomers, setDemoCustomers] =
+    useState<OnboardingCustomer[]>(DEMO_CUSTOMERS);
+  const [liveCustomers, setLiveCustomers] = useState<OnboardingCustomer[]>([]);
+  const [demoPaymentToday, setDemoPaymentToday] = useState(DEMO_PAYMENT_TODAY);
+  const [livePaymentToday, setLivePaymentToday] = useState(0);
+  const [demoTransactionCount, setDemoTransactionCount] = useState(2);
+  const [liveTransactionCount, setLiveTransactionCount] = useState(0);
+  const [reminderSent, setReminderSent] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [cust, setCust] = useState({ name: "", phone: "" });
+  const [quickEntry, setQuickEntry] = useState({
+    customerId: DEMO_CUSTOMERS[0]?.id ?? "",
+    type: "CREDIT" as "CREDIT" | "PAYMENT",
+    amount: "",
+    note: "",
+  });
+  const customers = user ? liveCustomers : demoCustomers;
+  const paymentToday = user ? livePaymentToday : demoPaymentToday;
+  const transactionCount = user ? liveTransactionCount : demoTransactionCount;
+  const dataLoading = useAppSelector(
+    (state) => state.customers.loading || state.transactions.loading,
+  );
 
-  const notify = (msg: string) => {
+  const notify = useCallback((msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 4000);
-  };
+  }, []);
+
+  const refreshLiveData = useCallback(async () => {
+    const [customerResult, transactionResult] = await Promise.all([
+      dispatch(fetchAllCustomers()).unwrap(),
+      dispatch(fetchAllTransactions()).unwrap(),
+    ]);
+    setLiveCustomers(mapCustomers(customerResult));
+    setLiveTransactionCount(transactionResult.length);
+    const today = new Date().toDateString();
+    setLivePaymentToday(
+      transactionResult
+        .filter(
+          (transaction) =>
+            transaction.type === "PAYMENT" &&
+            new Date(transaction.date).toDateString() === today,
+        )
+        .reduce((sum, transaction) => sum + Number(transaction.amount), 0),
+    );
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!sessionResolved) return;
+    if (!user) return;
+
+    let cancelled = false;
+    refreshLiveData().catch((error: unknown) => {
+      if (!cancelled) {
+        setDataError(
+          typeof error === "string"
+            ? error
+            : error instanceof Error
+              ? error.message
+              : "দোকানের তথ্য লোড করা যায়নি",
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshLiveData, sessionResolved, user]);
 
   const switchView = (v: View) => {
     setView(v);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const saveCustomer = () => {
-    if (!cust.name.trim()) return notify("দয়া করে গ্রাহকের নাম লিখুন");
-    setModalOpen(false);
-    notify(`অভিনন্দন! ${cust.name} সফলভাবে আপনার বাকি খাতায় যুক্ত হয়েছেন।`);
-    setCust({ name: "", phone: "", balance: "" });
-    // TODO: POST /api/customers
+  const saveCustomer = async () => {
+    if (!sessionResolved) {
+      notify("আপনার সেশন যাচাই করা হচ্ছে, একটু অপেক্ষা করুন");
+      return;
+    }
+    const name = cust.name.trim();
+    const phone = cust.phone.trim();
+    if (!name) return notify("দয়া করে গ্রাহকের নাম লিখুন");
+    if (!phone) return notify("দয়া করে গ্রাহকের মোবাইল নম্বর লিখুন");
+
+    setSaving(true);
+    try {
+      if (user) {
+        await dispatch(createCustomerRecord({ name, phone })).unwrap();
+        await refreshLiveData();
+      } else {
+        setDemoCustomers((previous) => [
+          {
+            id: `demo-${Date.now()}`,
+            name,
+            phone,
+            due: 0,
+            note: "ডেমো খাতায় সদ্য যুক্ত",
+          },
+          ...previous,
+        ]);
+      }
+
+      setModalOpen(false);
+      notify(
+        user
+          ? `${name} খাতায় যুক্ত হয়েছেন`
+          : `${name} ডেমো খাতায় যুক্ত হয়েছেন (শুধু এই পেজে)`,
+      );
+      setCust({ name: "", phone: "" });
+    } catch (error) {
+      notify(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "গ্রাহক যোগ করা যায়নি",
+      );
+      if (user) {
+        await refreshLiveData().catch(() => {
+          setDataError("তথ্য সংরক্ষিত হয়েছে কি না যাচাই করা যায়নি");
+        });
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const sendSms = (id: string) => {
-    setSms((s) => ({ ...s, [id]: "sending" }));
-    window.setTimeout(() => {
-      setSms((s) => ({ ...s, [id]: "done" }));
-      notify(
-        "আপনার নিবন্ধিত মার্চেন্ট নম্বরে একটি পরীক্ষামূলক তাগাদা পাঠানো হয়েছে!",
-      );
-      window.setTimeout(
-        () =>
-          setSms((state) =>
-            Object.fromEntries(
-              Object.entries(state).filter(([key]) => key !== id),
-            ),
+  const saveQuickEntry = async () => {
+    if (!sessionResolved) {
+      notify("আপনার সেশন যাচাই করা হচ্ছে, একটু অপেক্ষা করুন");
+      return;
+    }
+    const amount = Number(
+      quickEntry.amount.replace(/[০-৯]/g, (digit) =>
+        String("০১২৩৪৫৬৭৮৯".indexOf(digit)),
+      ),
+    );
+    const target = customers.find(
+      (customer) => customer.id === quickEntry.customerId,
+    );
+    if (!target) return notify("গ্রাহক নির্বাচন করুন");
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return notify("সঠিক টাকার পরিমাণ লিখুন");
+    }
+    if (quickEntry.type === "PAYMENT" && amount > target.due) {
+      return notify("জমার পরিমাণ বর্তমান বকেয়ার চেয়ে বেশি হতে পারে না");
+    }
+
+    setSaving(true);
+    try {
+      if (user) {
+        await dispatch(
+          createTransactionRecord({
+            customerId: target.id,
+            type: quickEntry.type,
+            amount,
+            note: quickEntry.note.trim() || undefined,
+          }),
+        ).unwrap();
+        await refreshLiveData();
+      } else {
+        setDemoCustomers((previous) =>
+          previous.map((customer) =>
+            customer.id !== target.id
+              ? customer
+              : {
+                  ...customer,
+                  due:
+                    customer.due +
+                    (quickEntry.type === "CREDIT" ? amount : -amount),
+                  note: quickEntry.note.trim() || "ডেমো লেনদেন যোগ হয়েছে",
+                },
           ),
-        3500,
+        );
+        if (quickEntry.type === "PAYMENT") {
+          setDemoPaymentToday((previous) => previous + amount);
+        }
+        setDemoTransactionCount((previous) => previous + 1);
+      }
+
+      setQuickEntryOpen(false);
+      notify(
+        user
+          ? "লেনদেন খাতায় সংরক্ষণ করা হয়েছে"
+          : "ডেমো লেনদেন যোগ হয়েছে (সার্ভারে সংরক্ষিত হয়নি)",
       );
-    }, 1200);
+      setQuickEntry((previous) => ({ ...previous, amount: "", note: "" }));
+    } catch (error) {
+      notify(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "লেনদেন সংরক্ষণ করা যায়নি",
+      );
+      if (user) await refreshLiveData().catch(() => undefined);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendReminder = (customer: OnboardingCustomer) => {
+    if (!user) {
+      notify(
+        "ডেমো: তাগাদার বার্তা তৈরি হয়েছে, কিন্তু কোনো বার্তা পাঠানো হয়নি।",
+      );
+      setReminderSent(true);
+      return;
+    }
+    const phone = customer.phone.replace(/\D/g, "").replace(/^0/, "88");
+    if (!phone) {
+      notify("গ্রাহকের সঠিক মোবাইল নম্বর পাওয়া যায়নি");
+      return;
+    }
+    const message =
+      `আসসালামু আলাইকুম ${customer.name}, ${shopName}তে আপনার বর্তমান বকেয়া ` +
+      `${formatTaka(customer.due)}। অনুগ্রহ করে পরিশোধ করুন। ধন্যবাদ - ${ownerName}`;
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    setReminderSent(true);
+  };
+
+  const sendFirstReminder = () => {
+    const customer = customers.find((item) => item.due > 0);
+    if (!customer) {
+      notify("তাগাদা পাঠানোর মতো বকেয়া খাতা নেই");
+      return;
+    }
+    sendReminder(customer);
+  };
+
+  const openAddCustomer = () => {
+    if (!sessionResolved) {
+      notify("আপনার সেশন যাচাই করা হচ্ছে, একটু অপেক্ষা করুন");
+      return;
+    }
+    setModalOpen(true);
   };
 
   const openVideoHelp = () =>
     notify(
       "বাকি খাতা ২-মিনিটের ভিডিও গাইড লোড হচ্ছে। ইন্টারনেটের প্রয়োজন হবে।",
     );
-  const openQuickEntry = () =>
-    notify(
-      'কুইক এন্ট্রি চালু হচ্ছে... লিখুনঃ যেমন "রফিক ভাই চিনি বাকি ১২০ টাকা"',
-    );
+  const openQuickEntry = () => {
+    if (!sessionResolved) {
+      notify("আপনার সেশন যাচাই করা হচ্ছে, একটু অপেক্ষা করুন");
+      return;
+    }
+    if (!customers.length) {
+      notify("কুইক এন্ট্রির আগে একজন কাস্টমার যোগ করুন");
+      setModalOpen(true);
+      return;
+    }
+    setQuickEntry((previous) => ({
+      ...previous,
+      customerId: customers[0].id,
+    }));
+    setQuickEntryOpen(true);
+  };
+
+  const totalDue = customers.reduce(
+    (total, customer) => total + customer.due,
+    0,
+  );
+  const owingCustomers = customers.filter(
+    (customer) => customer.due > 0,
+  ).length;
+  const demoView = sessionResolved && !user;
+  const completedSteps =
+    Number(customers.length > 0) +
+    Number(transactionCount > 0) +
+    Number(reminderSent);
+  const setupProgress = Math.round((completedSteps / 3) * 100);
 
   return (
     <div
@@ -342,27 +599,22 @@ export default function OnboardingPage() {
             <button
               onClick={() => switchView("welcome")}
               aria-current={view === "welcome" ? "page" : undefined}
-              className={view === "welcome" ? NAV_ACTIVE : NAV_IDLE}
+              className={`cursor-pointer ${view === "welcome" ? NAV_ACTIVE : NAV_IDLE}`}
             >
               স্বাগতম ও সেটআপ
             </button>
-            <button onClick={() => router.push("/store")} className={NAV_IDLE}>
+            <button
+              onClick={() => router.push("/store")}
+              className={`cursor-pointer ${NAV_IDLE}`}
+            >
               <Icon name="storefront" className="text-[18px]" />
               <span>আমার দোকানে যান</span>
             </button>
           </nav>
 
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              aria-label="বিজ্ঞপ্তি"
-              className="relative flex size-9 items-center justify-center rounded-full bg-surface-muted text-foreground-muted transition-colors hover:bg-surface-hover"
-            >
-              <Icon name="notifications" className="text-[20px]" />
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary ring-2 ring-surface" />
-            </button>
-            <div className="hidden items-center gap-2 sm:flex">
-              <div className="flex flex-col text-right">
+            <div className="flex items-center gap-2">
+              <div className="hidden flex-col text-right sm:flex">
                 <span className="text-label-lg font-semibold text-foreground">
                   {shopName}
                 </span>
@@ -370,9 +622,7 @@ export default function OnboardingPage() {
                   {ownerName}
                 </span>
               </div>
-              <div className="flex size-8 items-center justify-center rounded-full bg-primary text-on-primary">
-                <Icon name="person" className="text-[18px]" />
-              </div>
+              <AccountMenu />
             </div>
           </div>
         </div>
@@ -383,6 +633,38 @@ export default function OnboardingPage() {
         {/* ------------------------- WELCOME VIEW ------------------------- */}
         {view === "welcome" && (
           <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+            {!sessionResolved && (
+              <div className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-foreground-muted">
+                সেশন যাচাই করা হচ্ছে...
+              </div>
+            )}
+            {demoView && (
+              <div className="rounded-xl border border-rolling-fg/20 bg-rolling-bg px-4 py-3 text-sm font-semibold text-rolling-fg">
+                ডেমো মোড: এখানে যোগ করা গ্রাহক ও লেনদেন শুধু এই পেজে থাকবে; কোনো
+                তথ্য সার্ভারে পাঠানো হবে না।
+              </div>
+            )}
+            {dataError && user && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-due-bg px-4 py-3 text-sm text-primary">
+                <span>{dataError}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDataError(null);
+                    refreshLiveData().catch((error: unknown) => {
+                      setDataError(
+                        error instanceof Error
+                          ? error.message
+                          : "দোকানের তথ্য লোড করা যায়নি",
+                      );
+                    });
+                  }}
+                  className="cursor-pointer font-semibold underline"
+                >
+                  আবার চেষ্টা করুন
+                </button>
+              </div>
+            )}
             {/* 1. Store banner */}
             <div className="bg-surface rounded-2xl p-3 lg:p-4 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -413,9 +695,23 @@ export default function OnboardingPage() {
                     <span>
                       ব্যবসার ধরন: <strong>{businessType}</strong>
                     </span>
-                    <span className="inline-flex items-center gap-1 text-secondary font-medium">
-                      <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-                      ক্লাউড সিঙ্ক চালু (প্রথম দিন)
+                    <span
+                      className={`inline-flex items-center gap-1 font-medium ${
+                        demoView ? "text-tertiary" : "text-secondary"
+                      }`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          demoView
+                            ? "bg-tertiary"
+                            : "bg-secondary animate-pulse"
+                        }`}
+                      />
+                      {demoView
+                        ? "লোকাল ডেমো (সার্ভারে সংযুক্ত নয়)"
+                        : dataLoading
+                          ? "দোকানের তথ্য লোড হচ্ছে..."
+                          : "ক্লাউড সিঙ্ক চালু"}
                     </span>
                   </div>
                 </div>
@@ -423,15 +719,16 @@ export default function OnboardingPage() {
 
               <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full lg:w-auto lg:justify-end sm:justify-end">
                 <button
-                  onClick={() => setModalOpen(true)}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-primary text-on-primary font-semibold text-label-lg shadow-sm hover:shadow-md hover:bg-primary-hover transition-all"
+                  onClick={openAddCustomer}
+                  className="cursor-pointer 
+                   flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-primary text-on-primary font-semibold text-label-lg shadow-sm hover:shadow-md hover:bg-primary-hover transition-all"
                 >
                   <Icon name="person_add" className="text-[18px]" />+ কাস্টমার
                   যোগ করুন
                 </button>
                 <button
                   onClick={() => router.push("/store")}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-surface-muted hover:bg-surface-hover text-foreground font-semibold text-label-lg transition-colors"
+                  className="cursor-pointer  flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-surface-muted hover:bg-surface-hover text-foreground font-semibold text-label-lg transition-colors"
                 >
                   <Icon
                     name="storefront"
@@ -441,7 +738,7 @@ export default function OnboardingPage() {
                 </button>
                 <button
                   onClick={openVideoHelp}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-surface-muted hover:bg-surface-muted text-foreground-muted font-semibold text-label-lg transition-colors"
+                  className="cursor-pointer  inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-surface-muted hover:bg-surface-muted text-foreground-muted font-semibold text-label-lg transition-colors"
                 >
                   <Icon
                     name="play_circle"
@@ -477,16 +774,16 @@ export default function OnboardingPage() {
                           name="task_alt"
                           className="text-primary text-[18px]"
                         />
-                        দোকান খাতা সেটআপ: ১/৩ ধাপ সম্পন্ন
+                        দোকান খাতা সেটআপ: {completedSteps}/৩ ধাপ সম্পন্ন
                       </span>
                       <span className="font-mono text-primary font-bold">
-                        ৩৩%
+                        {setupProgress.toLocaleString("bn-BD")}%
                       </span>
                     </div>
                     <div className="w-full h-3 rounded-full bg-surface-hover overflow-hidden p-0.5">
                       <div
                         className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-                        style={{ width: "33%" }}
+                        style={{ width: `${setupProgress}%` }}
                       />
                     </div>
                   </div>
@@ -517,8 +814,14 @@ export default function OnboardingPage() {
               <div className="bg-surface rounded-2xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden hover:shadow-md transition-shadow">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-label-lg">
-                      ১
+                    <span
+                      className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-label-lg ${
+                        customers.length > 0
+                          ? "bg-secondary text-on-secondary"
+                          : "bg-primary text-on-primary"
+                      }`}
+                    >
+                      {customers.length > 0 ? "✓" : "১"}
                     </span>
                     <span className="px-1 py-0.5 rounded-full bg-due-bg text-due-fg font-medium text-label-md font-bold uppercase">
                       প্রথম করণীয়
@@ -526,11 +829,13 @@ export default function OnboardingPage() {
                   </div>
                   <div className="space-y-1 pt-1">
                     <h3 className="font-semibold text-title-lg text-foreground">
-                      প্রথম বাকি কাস্টমার যুক্ত করুন
+                      {customers.length > 0
+                        ? "কাস্টমার খাতায় যুক্ত হয়েছে"
+                        : "প্রথম বাকি কাস্টমার যুক্ত করুন"}
                     </h3>
                     <p className="font-normal text-body-md text-foreground-muted">
-                      খাতার প্রথম খতিয়ান খুলুন নাম ও মোবাইল নম্বর দিয়ে।
-                      কাস্টমারকে এক ক্লিকে হোয়াটসঅ্যাপে রসিদ পাঠিয়ে দিন।
+                      নাম ও মোবাইল নম্বর দিয়ে প্রথম কাস্টমার তৈরি করুন।
+                      লেনদেনের তথ্য পরের ধাপে যোগ হবে।
                     </p>
                   </div>
                   <div className="p-2 bg-background rounded-lg flex items-center gap-1 text-foreground-muted font-medium text-label-md">
@@ -538,29 +843,42 @@ export default function OnboardingPage() {
                       name="verified"
                       className="text-primary text-[18px]"
                     />
-                    কোনো অ্যাপ ছাড়াই কাস্টমার দেখতে পাবে
+                    {customers.length > 0
+                      ? `${customers.length.toLocaleString("bn-BD")} জন কাস্টমার খাতায় আছে`
+                      : "কোনো অ্যাপ ছাড়াই কাস্টমার দেখতে পাবে"}
                   </div>
                 </div>
                 <div className="pt-4">
                   <button
-                    onClick={() => setModalOpen(true)}
-                    className="w-full py-3 rounded-full bg-primary hover:bg-primary-hover text-on-primary font-semibold text-label-lg flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    onClick={openAddCustomer}
+                    className="cursor-pointer  w-full py-3 rounded-full bg-primary hover:bg-primary-hover text-on-primary font-semibold text-label-lg flex items-center justify-center gap-1.5 transition-all shadow-sm"
                   >
-                    <Icon name="add_circle" className="text-[18px]" />+ কাস্টমার
-                    যোগ করুন
+                    <Icon name="add_circle" className="text-[18px]" />
+                    {customers.length > 0
+                      ? "আরও কাস্টমার যোগ করুন"
+                      : "+ কাস্টমার যোগ করুন"}
                   </button>
                 </div>
               </div>
 
               {/* Card 2 */}
-              <QuickEntryCard onTry={openQuickEntry} />
+              <QuickEntryCard
+                onTry={openQuickEntry}
+                completed={transactionCount > 0}
+              />
 
               {/* Card 3 */}
               <div className="bg-surface rounded-2xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden hover:shadow-md transition-shadow">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="w-8 h-8 rounded-full bg-surface-muted text-foreground flex items-center justify-center font-bold text-label-lg">
-                      ৩
+                    <span
+                      className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-label-lg ${
+                        reminderSent
+                          ? "bg-secondary text-on-secondary"
+                          : "bg-surface-muted text-foreground"
+                      }`}
+                    >
+                      {reminderSent ? "✓" : "৩"}
                     </span>
                     <span className="px-1 py-0.5 rounded-full bg-settled-bg text-settled-fg font-medium text-label-md font-semibold">
                       স্মার্ট তাগাদা
@@ -582,9 +900,14 @@ export default function OnboardingPage() {
                 </div>
                 <div className="pt-4">
                   <SmsButton
-                    status={sms.card3}
-                    onSend={() => sendSms("card3")}
-                    className="w-full py-3 rounded-full bg-secondary text-on-secondary font-semibold text-label-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm hover:brightness-110"
+                    onSend={sendFirstReminder}
+                    status={reminderSent ? "done" : undefined}
+                    label={
+                      reminderSent
+                        ? "তাগাদা সম্পন্ন"
+                        : "হোয়াটসঅ্যাপ তাগাদা পাঠান"
+                    }
+                    className="cursor-pointer w-full py-3 rounded-full bg-secondary text-on-secondary font-semibold text-label-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm hover:brightness-110"
                   />
                 </div>
               </div>
@@ -601,8 +924,29 @@ export default function OnboardingPage() {
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {METRICS.map((m) => {
-                  const d = demo ? m.demo : m.empty;
+                {METRICS.map((m, index) => {
+                  const liveMetrics = [
+                    {
+                      value: formatTaka(totalDue),
+                      note: `${owingCustomers} জন গ্রাহকের কাছে বকেয়া`,
+                    },
+                    {
+                      value: `${customers.length.toLocaleString("bn-BD")} জন`,
+                      note: "খাতায় থাকা গ্রাহক",
+                    },
+                    {
+                      value: `${owingCustomers.toLocaleString("bn-BD")} জন`,
+                      note: "বকেয়া থাকা গ্রাহক",
+                    },
+                    {
+                      value: formatTaka(paymentToday),
+                      note: user ? "আজকের আদায়" : "ডেমো দিনের জমা",
+                    },
+                  ];
+                  const d = {
+                    ...m.empty,
+                    ...liveMetrics[index],
+                  };
                   return (
                     <div
                       key={m.label}
@@ -662,7 +1006,7 @@ export default function OnboardingPage() {
                             : "নমুনা ডেটা সক্রিয় হয়েছে! উপরের খতিয়ান স্ট্যাটাসে দেখুন।",
                         );
                       }}
-                      className={`inline-flex items-center gap-2 px-4 py-3 rounded-full text-on-secondary font-semibold text-label-lg transition-all shadow-md ${
+                      className={`cursor-pointer  inline-flex items-center gap-2 px-4 py-3 rounded-full text-on-secondary font-semibold text-label-lg transition-all shadow-md ${
                         demo
                           ? "bg-primary"
                           : "bg-secondary hover:brightness-110"
@@ -678,7 +1022,7 @@ export default function OnboardingPage() {
                     </button>
                     <button
                       onClick={() => router.push("/demo-store")}
-                      className="inline-flex items-center gap-2 px-4 py-3 rounded-full border border-border bg-background text-foreground font-semibold text-label-lg transition-colors hover:bg-surface-muted"
+                      className="cursor-pointer  inline-flex items-center gap-2 px-4 py-3 rounded-full border border-border bg-background text-foreground font-semibold text-label-lg transition-colors hover:bg-surface-muted"
                     >
                       <Icon name="storefront" className="text-[18px]" />
                       ডেমো দোকান খুলুন
@@ -787,7 +1131,7 @@ export default function OnboardingPage() {
                 </div>
               </div>
 
-              <QuickEntryCard onTry={openQuickEntry} bordered />
+              {/* <QuickEntryCard onTry={openQuickEntry} bordered /> */}
 
               <div className="bg-surface rounded-2xl p-4 flex flex-col justify-between shadow-sm border border-border/30 hover:shadow-md transition-shadow">
                 <div className="flex items-start gap-3">
@@ -808,16 +1152,6 @@ export default function OnboardingPage() {
                   <span className="font-semibold text-label-lg font-bold text-primary font-mono">
                     হটলাইন: ১৬২৬৩
                   </span>
-                  <button
-                    onClick={openVideoHelp}
-                    className="px-3 py-1.5 rounded-full bg-surface-muted hover:bg-surface-muted text-foreground font-medium text-label-md transition-colors inline-flex items-center gap-1"
-                  >
-                    <Icon
-                      name="headset_mic"
-                      className="text-[16px] text-tertiary"
-                    />
-                    সরাসরি সহায়তা
-                  </button>
                 </div>
               </div>
             </div>
@@ -827,6 +1161,38 @@ export default function OnboardingPage() {
         {/* --------------------------- DOKAN VIEW -------------------------- */}
         {view === "dokan" && (
           <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+            {demoView && (
+              <div className="rounded-xl border border-rolling-fg/20 bg-rolling-bg px-4 py-3 text-sm font-semibold text-rolling-fg">
+                ডেমো মোড: এখানে যোগ করা গ্রাহক ও লেনদেন শুধু এই পেজে থাকবে; কোনো
+                তথ্য সার্ভারে পাঠানো হবে না।
+              </div>
+            )}
+            {dataLoading && user && (
+              <div className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-foreground-muted">
+                দোকানের তথ্য লোড হচ্ছে...
+              </div>
+            )}
+            {dataError && user && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-due-bg px-4 py-3 text-sm text-primary">
+                <span>{dataError}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDataError(null);
+                    refreshLiveData().catch((error: unknown) => {
+                      setDataError(
+                        error instanceof Error
+                          ? error.message
+                          : "দোকানের তথ্য লোড করা যায়নি",
+                      );
+                    });
+                  }}
+                  className="cursor-pointer font-semibold underline"
+                >
+                  আবার চেষ্টা করুন
+                </button>
+              </div>
+            )}
             <div className="bg-surface rounded-2xl p-3 lg:p-4 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="relative">
@@ -857,15 +1223,15 @@ export default function OnboardingPage() {
               </div>
               <div className="flex flex-wrap items-center gap-1 sm:gap-2 w-full lg:w-auto lg:justify-end">
                 <button
-                  onClick={() => setModalOpen(true)}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-primary text-on-primary font-semibold text-label-lg shadow-sm hover:shadow-md hover:bg-primary-hover transition-all"
+                  onClick={openAddCustomer}
+                  className="cursor-pointer  flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-primary text-on-primary font-semibold text-label-lg shadow-sm hover:shadow-md hover:bg-primary-hover transition-all"
                 >
                   <Icon name="person_add" className="text-[18px]" />+ কাস্টমার
                   যোগ করুন
                 </button>
                 <button
                   onClick={() => switchView("welcome")}
-                  className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-full bg-surface-muted hover:bg-surface-hover text-foreground font-semibold text-label-lg transition-colors"
+                  className="cursor-pointer  inline-flex items-center gap-1.5 px-3 py-2.5 rounded-full bg-surface-muted hover:bg-surface-hover text-foreground font-semibold text-label-lg transition-colors"
                 >
                   <Icon name="arrow_back" className="text-[18px]" />
                   সেটআপ গাইডে ফিরুন
@@ -880,36 +1246,36 @@ export default function OnboardingPage() {
                   l: "মোট বর্তমান বাকি",
                   i: "payments",
                   w: "bg-due-bg text-primary",
-                  v: "৳ ১৯,৮৫০",
+                  v: formatTaka(totalDue),
                   vc: "text-primary",
-                  n: "১২ জন গ্রাহকের কাছে পাওনা",
+                  n: `${owingCustomers.toLocaleString("bn-BD")} জন গ্রাহকের কাছে পাওনা`,
                   nc: "text-primary",
                 },
                 {
                   l: "আজকের আদায়/জমা",
                   i: "price_check",
                   w: "bg-settled-bg text-secondary",
-                  v: "৳ ৪,২০০",
+                  v: formatTaka(paymentToday),
                   vc: "text-secondary",
-                  n: "৫ জন থেকে সংগৃহীত",
+                  n: user ? "আজকের জমা" : "ডেমো দিনের জমা",
                   nc: "text-secondary",
                 },
                 {
-                  l: "আজকের ক্যাশ বিক্রি",
-                  i: "point_of_sale",
-                  w: "bg-rolling-bg text-tertiary",
-                  v: "৳ ৮,৫৫০",
+                  l: "খাতার গ্রাহক সংখ্যা",
+                  i: "schedule",
+                  w: "bg-surface-muted text-primary",
+                  v: `${customers.length.toLocaleString("bn-BD")} জন`,
                   vc: "text-foreground",
-                  n: "ক্যাশ কাউন্টারে জমা",
+                  n: "সক্রিয় খাতার গ্রাহক",
                   nc: "text-foreground-muted",
                 },
                 {
-                  l: "জরুরি তাগাদা তালিকা",
-                  i: "schedule",
-                  w: "bg-surface-muted text-primary",
-                  v: "৩ জন",
-                  vc: "text-foreground",
-                  n: "৭ দিনের বেশি বাকি",
+                  l: "বকেয়া থাকা গ্রাহক",
+                  i: "notification_important",
+                  w: "bg-rolling-bg text-tertiary",
+                  v: `${owingCustomers.toLocaleString("bn-BD")} জন`,
+                  vc: "text-tertiary",
+                  n: "বর্তমানে বকেয়া আছে",
                   nc: "text-tertiary",
                 },
               ].map((m) => (
@@ -951,8 +1317,8 @@ export default function OnboardingPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setModalOpen(true)}
-                  className="px-3 py-1.5 rounded-full bg-primary text-on-primary font-semibold text-label-lg inline-flex items-center gap-1 shadow-sm"
+                  onClick={openAddCustomer}
+                  className="cursor-pointer  px-3 py-1.5 rounded-full bg-primary text-on-primary font-semibold text-label-lg inline-flex items-center gap-1 shadow-sm"
                 >
                   <Icon name="add" className="text-[16px]" />
                   নতুন খতিয়ান
@@ -960,49 +1326,64 @@ export default function OnboardingPage() {
               </div>
 
               <div className="space-y-1">
-                {CUSTOMERS.map((c, idx) => (
-                  <div
-                    key={c.name}
-                    className="p-3 rounded-lg bg-background flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 hover:bg-surface-muted transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold font-semibold ${c.avatar}`}
-                      >
-                        {c.initial}
+                {customers.length === 0 ? (
+                  <p className="rounded-xl bg-background p-6 text-center text-sm text-foreground-muted">
+                    {dataLoading
+                      ? "গ্রাহকের খাতা লোড হচ্ছে..."
+                      : "এখনো কোনো গ্রাহক যোগ করা হয়নি। নতুন খতিয়ান তৈরি করুন।"}
+                  </p>
+                ) : (
+                  customers.map((c, idx) => (
+                    <div
+                      key={c.id}
+                      className="p-3 rounded-lg bg-background flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 hover:bg-surface-muted transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold font-semibold ${
+                            idx % 3 === 0
+                              ? "bg-due-bg text-primary"
+                              : idx % 3 === 1
+                                ? "bg-settled-bg text-secondary"
+                                : "bg-rolling-bg text-tertiary"
+                          }`}
+                        >
+                          {c.name.slice(0, 1)}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-title-lg text-foreground font-bold">
+                            {c.name}{" "}
+                            <span className="font-medium text-label-md font-mono text-foreground-muted">
+                              {c.phone}
+                            </span>
+                          </div>
+                          <div className="font-normal text-body-md text-foreground-muted">
+                            {c.note}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="font-semibold text-title-lg text-foreground font-bold">
-                          {c.name}{" "}
-                          <span className="font-medium text-label-md font-mono text-foreground-muted">
-                            {c.phone}
+                      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                        <div className="text-right">
+                          <span className="font-extrabold text-[20px] text-primary font-mono font-bold block">
+                            {formatTaka(c.due)} بাকি
+                          </span>
+                          <span
+                            className={`font-medium text-label-md ${
+                              c.due > 0 ? "text-primary" : "text-secondary"
+                            }`}
+                          >
+                            {c.due > 0 ? "বকেয়া আছে" : "বকেয়া নেই"}
                           </span>
                         </div>
-                        <div className="font-normal text-body-md text-foreground-muted">
-                          {c.note}
-                        </div>
+                        <SmsButton
+                          onSend={() => sendReminder(c)}
+                          small
+                          className="cursor-pointer  px-3 py-2 rounded-full bg-secondary text-on-secondary font-medium text-label-md inline-flex items-center gap-1 shadow-sm transition-all hover:brightness-110"
+                        />
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                      <div className="text-right">
-                        <span className="font-extrabold text-[20px] text-primary font-mono font-bold block">
-                          {c.amount}
-                        </span>
-                        <span
-                          className={`font-medium text-label-md ${c.tagClass}`}
-                        >
-                          {c.tag}
-                        </span>
-                      </div>
-                      <SmsButton
-                        status={sms[`row${idx}`]}
-                        onSend={() => sendSms(`row${idx}`)}
-                        small
-                        className="px-3 py-2 rounded-full bg-secondary text-on-secondary font-medium text-label-md inline-flex items-center gap-1 shadow-sm transition-all hover:brightness-110"
-                      />
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -1065,17 +1446,17 @@ export default function OnboardingPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-headline-md text-foreground">
-                    প্রথম কাস্টমার নিবন্ধন
+                    কাস্টমার খাতায় যুক্ত করুন
                   </h3>
                   <p className="font-medium text-label-md text-foreground-muted">
-                    মাত্র ৩০ সেকেন্ডে খতিয়ান তৈরি করুন
+                    এই ধাপে শুধু কাস্টমারের পরিচিতি সংরক্ষণ হবে
                   </p>
                 </div>
               </div>
               <button
                 aria-label="বন্ধ করুন"
                 onClick={() => setModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-surface-muted hover:bg-surface-muted flex items-center justify-center text-foreground-muted"
+                className="cursor-pointer  w-8 h-8 rounded-full bg-surface-muted hover:bg-surface-muted flex items-center justify-center text-foreground-muted"
               >
                 <Icon name="close" className="text-[18px]" />
               </button>
@@ -1096,7 +1477,7 @@ export default function OnboardingPage() {
                     placeholder="উদাঃ কামরুল ইসলাম"
                     type="text"
                     value={cust.name}
-                    onChange={(e) => setCust({ ...cust, name: e.target.value })}
+                    onChange={(e) =>                     setCust((current) => ({ ...current, name: e.target.value }))}
                   />
                 </div>
               </div>
@@ -1116,27 +1497,10 @@ export default function OnboardingPage() {
                     type="tel"
                     value={cust.phone}
                     onChange={(e) =>
-                      setCust({ ...cust, phone: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block font-semibold text-label-lg text-foreground mb-1">
-                  পূর্বের কোনো পুরোনো বাকি আছে? (ঐচ্ছিক)
-                </label>
-                <div className="relative">
-                  <Icon
-                    name="payments"
-                    className="absolute left-3 top-3 text-foreground-muted text-[20px]"
-                  />
-                  <input
-                    className={INPUT}
-                    placeholder="৳ ০"
-                    type="number"
-                    value={cust.balance}
-                    onChange={(e) =>
-                      setCust({ ...cust, balance: e.target.value })
+                      setCust((current) => ({
+                        ...current,
+                        phone: e.target.value,
+                      }))
                     }
                   />
                 </div>
@@ -1147,24 +1511,173 @@ export default function OnboardingPage() {
                   className="text-secondary text-[20px] mt-0.5"
                 />
                 <p className="font-medium text-label-md text-settled-fg leading-tight">
-                  কাস্টমার যুক্ত হওয়ার সাথে সাথে সরাসরি হোয়াটসঅ্যাপে ওয়েলকাম
-                  মেসেজ ও হিসাবের খতিয়ান লিংক পাঠানো যাবে।
+                  কাস্টমার যোগ হলে পরের ধাপে বাকি (Credit) বা জমা (Debit)
+                  লেনদেন আলাদাভাবে যোগ করুন।
                 </p>
               </div>
               <div className="pt-2 flex gap-2">
                 <button
+                  type="button"
+                  disabled={saving}
                   onClick={() => setModalOpen(false)}
-                  className="flex-1 py-3 rounded-full bg-surface-muted hover:bg-surface-muted text-foreground-muted font-semibold text-label-lg transition-colors"
+                  className="cursor-pointer flex-1 py-3 rounded-full bg-surface-muted hover:bg-surface-muted text-foreground-muted font-semibold text-label-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   বাতিল
                 </button>
                 <button
+                  type="button"
+                  disabled={saving}
                   onClick={saveCustomer}
-                  className="flex-1 py-3 rounded-full bg-primary hover:bg-primary-hover text-on-primary font-semibold text-label-lg transition-all shadow-md"
+                  className="cursor-pointer flex-1 py-3 rounded-full bg-primary hover:bg-primary-hover text-on-primary font-semibold text-label-lg transition-all shadow-md disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  সংরক্ষণ ও খাতা শুরু
+                  {saving ? "সংরক্ষণ হচ্ছে..." : "কাস্টমার সংরক্ষণ করুন"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {quickEntryOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-secondary/40 p-4 backdrop-blur-sm"
+          onClick={() => {
+            if (!saving) setQuickEntryOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quick-entry-title"
+            className="relative w-full max-w-lg rounded-2xl bg-surface p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3 border-b border-border pb-3">
+              <div>
+                <h2
+                  id="quick-entry-title"
+                  className="font-bold text-headline-md text-foreground"
+                >
+                  দ্রুত লেনদেন যোগ
+                </h2>
+                <p className="font-medium text-label-md text-foreground-muted">
+                  {user
+                    ? "এই লেনদেন আপনার সার্ভার খাতায় সংরক্ষিত হবে।"
+                    : "ডেমো লেনদেন শুধু এই পেজে থাকবে; সার্ভারে যাবে না।"}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="বন্ধ করুন"
+                disabled={saving}
+                onClick={() => setQuickEntryOpen(false)}
+                className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-surface-muted text-foreground-muted disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Icon name="close" className="text-[18px]" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label
+                  htmlFor="quick-entry-customer"
+                  className="mb-1 block font-semibold text-label-lg text-foreground"
+                >
+                  কাস্টমার
+                </label>
+                <select
+                  id="quick-entry-customer"
+                  value={quickEntry.customerId}
+                  onChange={(event) =>
+                    setQuickEntry({
+                      ...quickEntry,
+                      customerId: event.target.value,
+                    })
+                  }
+                  className={INPUT}
+                >
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} — বকেয়া {formatTaka(customer.due)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="quick-entry-type"
+                  className="mb-1 block font-semibold text-label-lg text-foreground"
+                >
+                  লেনদেনের ধরন
+                </label>
+                <select
+                  id="quick-entry-type"
+                  value={quickEntry.type}
+                  onChange={(event) =>
+                    setQuickEntry({
+                      ...quickEntry,
+                      type: event.target.value as "CREDIT" | "PAYMENT",
+                    })
+                  }
+                  className={INPUT}
+                >
+                  <option value="CREDIT">বাকি যোগ (Credit)</option>
+                  <option value="PAYMENT">জমা গ্রহণ (Debit)</option>
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="quick-entry-amount"
+                  className="mb-1 block font-semibold text-label-lg text-foreground"
+                >
+                  টাকার পরিমাণ
+                </label>
+                <input
+                  id="quick-entry-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={quickEntry.amount}
+                  onChange={(event) =>
+                    setQuickEntry({
+                      ...quickEntry,
+                      amount: event.target.value,
+                    })
+                  }
+                  className={INPUT}
+                  placeholder="৳ ০"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="quick-entry-note"
+                  className="mb-1 block font-semibold text-label-lg text-foreground"
+                >
+                  বিবরণ (ঐচ্ছিক)
+                </label>
+                <input
+                  id="quick-entry-note"
+                  type="text"
+                  value={quickEntry.note}
+                  onChange={(event) =>
+                    setQuickEntry({
+                      ...quickEntry,
+                      note: event.target.value,
+                    })
+                  }
+                  className={INPUT}
+                  placeholder="যেমন: চাল ও তেল"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={saving || customers.length === 0}
+                onClick={saveQuickEntry}
+                className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary py-3 font-semibold text-on-primary shadow-sm transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Icon name="save" className="text-[18px]" />
+                {saving ? "সংরক্ষণ হচ্ছে..." : "লেনদেন সংরক্ষণ করুন"}
+              </button>
             </div>
           </div>
         </div>
@@ -1190,9 +1703,11 @@ export default function OnboardingPage() {
 
 function QuickEntryCard({
   onTry,
+  completed,
   bordered = false,
 }: {
   onTry: () => void;
+  completed: boolean;
   bordered?: boolean;
 }) {
   return (
@@ -1203,8 +1718,14 @@ function QuickEntryCard({
     >
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="w-8 h-8 rounded-full bg-surface-muted text-foreground flex items-center justify-center font-bold text-label-lg">
-            ২
+          <span
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-label-lg ${
+              completed
+                ? "bg-secondary text-on-secondary"
+                : "bg-surface-muted text-foreground"
+            }`}
+          >
+            {completed ? "✓" : "২"}
           </span>
           <span className="px-1 py-0.5 rounded-full bg-rolling-bg text-rolling-fg font-medium text-label-md font-semibold">
             স্মার্ট ফিচার
@@ -1212,29 +1733,29 @@ function QuickEntryCard({
         </div>
         <div className="space-y-1 pt-1">
           <h3 className="font-semibold text-title-lg text-foreground">
-            দ্রুত লিখে বাকি যোগ
+            {completed ? "লেনদেন খাতায় যুক্ত হয়েছে" : "প্রথম লেনদেন যোগ করুন"}
           </h3>
           <p className="font-normal text-body-md text-foreground-muted">
-            সহজ কুইক এন্ট্রি দিয়ে মাত্র কয়েক সেকেন্ডে পণ্য বা টাকার অংক দ্রুত
+            কাস্টমার বেছে বাকি (Credit) যোগ করুন অথবা জমা (Debit) গ্রহণ করে
             হিসাবভুক্ত করুন।
           </p>
         </div>
-        <div className="p-2 bg-background rounded-lg space-y-1 text-center">
+        {/* <div className="p-2 bg-background rounded-lg space-y-1 text-center">
           <span className="font-medium text-label-md text-foreground-muted block">
             উদাহরণ বাক্য:
           </span>
           <span className="font-mono text-label-md text-primary font-semibold block">
-            “করিম চা-বিস্কুট বাকি ৫০ টাকা”
+            “করিম • বাকি ৫০ টাকা / জমা ৫০ টাকা”
           </span>
-        </div>
+        </div> */}
       </div>
       <div className="pt-4">
         <button
           onClick={onTry}
-          className="w-full py-3 rounded-full bg-surface-muted hover:bg-surface-hover text-foreground font-semibold text-label-lg flex items-center justify-center gap-1.5 transition-colors"
+          className="cursor-pointer w-full py-3 rounded-full bg-surface-muted hover:bg-surface-hover text-foreground font-semibold text-label-lg flex items-center justify-center gap-1.5 transition-colors"
         >
           <Icon name="edit_note" className="text-primary text-[18px]" />
-          কুইক এন্ট্রি পরখ করুন
+          {completed ? "আরও লেনদেন যোগ করুন" : "প্রথম লেনদেন যোগ করুন"}
         </button>
       </div>
     </div>

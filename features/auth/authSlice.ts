@@ -1,4 +1,5 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import { apiRequest } from "@/lib/api/client";
 
 export const BUSINESS_TYPES = [
   "GROCERY",
@@ -48,15 +49,19 @@ type AuthResponse = {
 
 type AuthState = {
   user: AuthUser | null;
-  status: "idle" | "loading" | "authenticated" | "failed";
+  status: "idle" | "loading" | "authenticated" | "unauthenticated" | "failed";
+  sessionResolved: boolean;
   sessionLoading: boolean;
+  logoutLoading: boolean;
   error: string | null;
 };
 
 const initialState: AuthState = {
   user: null,
   status: "idle",
+  sessionResolved: false,
   sessionLoading: false,
+  logoutLoading: false,
   error: null,
 };
 
@@ -164,31 +169,22 @@ export const loadCurrentUser = createAsyncThunk<
 >(
   "auth/loadCurrentUser",
   async (_, thunkApi) => {
-    let response: Response;
     try {
-      response = await fetch(`${API_BASE_URL}/auth/me`, {
-        credentials: "include",
-      });
-    } catch {
+      const response = await apiRequest<unknown>("/auth/me");
+      const responseBody = { success: response.success, data: response.data };
+      if (!isAuthResponse(responseBody)) {
+        return thunkApi.rejectWithValue(
+          "সার্ভার থেকে সঠিক ব্যবহারকারীর তথ্য পাওয়া যায়নি।",
+        );
+      }
+      return responseBody.data.user;
+    } catch (error) {
       return thunkApi.rejectWithValue(
-        "সার্ভারের সাথে সংযোগ করা যাচ্ছে না। ইন্টারনেট সংযোগ পরীক্ষা করুন।",
+        error instanceof Error
+          ? error.message
+          : "ব্যবহারকারীর তথ্য পাওয়া যায়নি।",
       );
     }
-
-    let responseBody: unknown;
-    try {
-      responseBody = await response.json();
-    } catch {
-      return thunkApi.rejectWithValue("সার্ভার থেকে সঠিক উত্তর পাওয়া যায়নি।");
-    }
-
-    if (!response.ok || !isAuthResponse(responseBody)) {
-      return thunkApi.rejectWithValue(
-        getErrorMessage(responseBody) ?? "ব্যবহারকারীর তথ্য পাওয়া যায়নি।",
-      );
-    }
-
-    return responseBody.data.user;
   },
   {
     condition: (_, { getState }) => {
@@ -230,6 +226,37 @@ export const register = createAsyncThunk<
   }
 });
 
+export const logout = createAsyncThunk<
+  void,
+  void,
+  { rejectValue: string }
+>("auth/logout", async (_, thunkApi) => {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    return thunkApi.rejectWithValue(
+      "সার্ভারের সাথে সংযোগ করা যাচ্ছে না। আবার চেষ্টা করুন।",
+    );
+  }
+
+  let responseBody: unknown;
+  try {
+    responseBody = await response.json();
+  } catch {
+    return thunkApi.rejectWithValue("সার্ভার থেকে সঠিক উত্তর পাওয়া যায়নি।");
+  }
+
+  if (!response.ok) {
+    return thunkApi.rejectWithValue(
+      getErrorMessage(responseBody) ?? "লগআউট করা যায়নি। আবার চেষ্টা করুন।",
+    );
+  }
+});
+
 const authSlice = createSlice({
   name: "auth",
   initialState,
@@ -245,11 +272,15 @@ const authSlice = createSlice({
       })
       .addCase(loadCurrentUser.fulfilled, (state, action) => {
         state.sessionLoading = false;
+        state.sessionResolved = true;
         state.status = "authenticated";
         state.user = action.payload;
       })
       .addCase(loadCurrentUser.rejected, (state) => {
         state.sessionLoading = false;
+        state.sessionResolved = true;
+        state.status = "unauthenticated";
+        state.user = null;
       })
       .addCase(login.pending, (state) => {
         state.status = "loading";
@@ -257,6 +288,7 @@ const authSlice = createSlice({
       })
       .addCase(login.fulfilled, (state, action) => {
         state.status = "authenticated";
+        state.sessionResolved = true;
         state.user = action.payload;
       })
       .addCase(login.rejected, (state, action) => {
@@ -270,12 +302,27 @@ const authSlice = createSlice({
       })
       .addCase(register.fulfilled, (state, action) => {
         state.status = "authenticated";
+        state.sessionResolved = true;
         state.user = action.payload;
       })
       .addCase(register.rejected, (state, action) => {
         state.status = "failed";
         state.user = null;
         state.error = action.payload ?? "নিবন্ধন করা যায়নি। আবার চেষ্টা করুন।";
+      })
+      .addCase(logout.pending, (state) => {
+        state.logoutLoading = true;
+        state.error = null;
+      })
+      .addCase(logout.fulfilled, (state) => {
+        state.logoutLoading = false;
+        state.sessionResolved = true;
+        state.status = "unauthenticated";
+        state.user = null;
+      })
+      .addCase(logout.rejected, (state, action) => {
+        state.logoutLoading = false;
+        state.error = action.payload ?? "লগআউট করা যায়নি। আবার চেষ্টা করুন।";
       });
   },
 });

@@ -1,5 +1,7 @@
-import StorePage from "@/app/store/page";
+"use client";
+
+import StorePageView from "@/components/store/store-page";
 
 export default function DemoStorePage() {
-  return <StorePage />;
+  return <StorePageView demo />;
 }

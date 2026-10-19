@@ -82,11 +82,11 @@
   --shadow-modal: var(--shadow-3);
 
   --font-display:
-    var(--font-newsreader), var(--font-hind-siliguri),
-    ui-sans-serif, system-ui, sans-serif;
+    var(--font-newsreader), var(--font-hind-siliguri), ui-sans-serif, system-ui,
+    sans-serif;
   --font-sans:
-    var(--font-plus-jakarta), var(--font-hind-siliguri),
-    ui-sans-serif, system-ui, sans-serif;
+    var(--font-plus-jakarta), var(--font-hind-siliguri), ui-sans-serif,
+    system-ui, sans-serif;
 }
 
 html {
@@ -109,6 +109,10 @@ h2,
 h3,
 h4 {
   color: var(--foreground);
+}
+
+button {
+  cursor: pointer !important;
 }
 
 ::selection {
