@@ -320,8 +320,8 @@ export default function Page() {
                 className="h-44 bg-surface-muted sm:h-70 relative"
               >
                 <Image
-                  src={"/screen.png"}
-                  alt="login image"
+                  src="/screen.webp"
+                  alt="Baki Khata preview"
                   fill
                   className="object-cover"
                 />

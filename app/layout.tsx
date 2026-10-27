@@ -38,16 +38,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "বাকি খাতা — সহজ ও নির্ভরযোগ্য ডিজিটাল খাতা",
   description:
-    "বাংলাদেশের মুদি দোকান, ফার্মেসি ও টেইলার্সের জন্য তৈরি সহজ ডিজিটাল লেজার।",
-
+    "বাংলাদেশের মুদি দোকান, ফার্মেসি ও টেইলার্সের জন্য তৈরি সহজ ডিজিটাল লেজার.",
   appleWebApp: {
     capable: true,
     title: "বাকি খাতা",
     statusBarStyle: "default",
   },
-
   icons: {
-    apple: "/apple-touch-icon.png",
+    apple: "/icons/apple-touch-icon.png",
   },
 };
 
