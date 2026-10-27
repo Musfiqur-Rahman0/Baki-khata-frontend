@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Toaster } from "sonner";
 import {
@@ -39,6 +39,20 @@ export const metadata: Metadata = {
   title: "বাকি খাতা — সহজ ও নির্ভরযোগ্য ডিজিটাল খাতা",
   description:
     "বাংলাদেশের মুদি দোকান, ফার্মেসি ও টেইলার্সের জন্য তৈরি সহজ ডিজিটাল লেজার।",
+
+  appleWebApp: {
+    capable: true,
+    title: "বাকি খাতা",
+    statusBarStyle: "default",
+  },
+
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#c25927",
 };
 
 export default function RootLayout({
