@@ -82,13 +82,15 @@ Configure the Vercel project as follows:
 Add this variable to the Vercel **Production** environment:
 
 ```env
-NEXT_PUBLIC_API_URL=https://baki-khata-backend.onrender.com/api/v1
+NEXT_PUBLIC_API_URL=/api/v1
 ```
 
-Redeploy after changing environment variables because `NEXT_PUBLIC_*` values
-are included in the frontend build. The frontend does not need the database
-URL, JWT secret, or Gemini API key; those belong only in backend environment
-configuration.
+The Next.js rewrite proxies `/api/v1/*` requests to the Render API through the
+frontend's origin. Keep the API URL same-origin so auth cookies are handled as
+first-party cookies rather than third-party cookies. Redeploy after changing
+environment variables because `NEXT_PUBLIC_*` values are included in the
+frontend build. The frontend does not need the database URL, JWT secret, or
+Gemini API key; those belong only in backend environment configuration.
 
 ## Reuse this frontend for another project
 
@@ -133,12 +135,11 @@ HTTP-only cookies issued by the backend; JavaScript cannot read them. When an
 API request receives `401`, the shared API client attempts `/auth/refresh` and
 retries the original request once.
 
-For the current Vercel and Render deployment, both sites use HTTPS and the
-backend must allow the frontend origin with credentialed CORS. Since Vercel
-and Render hostnames are cross-site, browser third-party-cookie restrictions
-may affect cookie authentication. For the most reliable production setup,
-consider using frontend and API custom domains under the same registrable
-domain, then update the backend CORS allowlist and cookie policy accordingly.
+The Vercel rewrite sends API requests through the frontend origin, avoiding
+cross-site browser requests to Render. The backend still issues secure,
+HTTP-only cookies and should allow the frontend origin with credentialed CORS.
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for deployment settings and the production
+authentication checklist.
 
 ## Production checks
 
@@ -147,5 +148,6 @@ domain, then update the backend CORS allowlist and cookie policy accordingly.
 3. Reload a protected page and verify the session restores.
 4. Check the browser Network panel for `/api/v1/auth/me`; when access expires,
    verify `/api/v1/auth/refresh` succeeds and the original request retries.
-5. Verify demo actions remain local and live merchant operations reach the
+5. Sign out and confirm the session is cleared.
+6. Verify demo actions remain local and live merchant operations reach the
    backend.
