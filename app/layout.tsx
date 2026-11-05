@@ -9,6 +9,7 @@ import {
 } from "next/font/google";
 
 import StoreProvider from "@/app/StoreProvider";
+import SwRegister from "../components/pwa/sw-register";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -74,6 +75,7 @@ export default function RootLayout({
           <StoreProvider>{children}</StoreProvider>
         </Suspense>
         <Toaster position="bottom-right" richColors />
+        <SwRegister />
       </body>
     </html>
   );

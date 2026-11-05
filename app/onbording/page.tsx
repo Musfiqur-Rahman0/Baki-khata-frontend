@@ -55,6 +55,7 @@ import {
   createTransactionRecord,
   fetchAllTransactions,
 } from "@/features/transactions/transactionSlice";
+import { getQueuedTransactions } from "@/lib/offline";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 
 /* ------------------------------------------------------------------ */
@@ -346,12 +347,27 @@ function OnboardingContent() {
   }, []);
 
   const refreshLiveData = useCallback(async () => {
-    const [customerResult, transactionResult] = await Promise.all([
+    const [customerResult, transactionResult, queuedTransactions] = await Promise.all([
       dispatch(fetchAllCustomers()).unwrap(),
       dispatch(fetchAllTransactions()).unwrap(),
+      getQueuedTransactions(),
     ]);
-    setLiveCustomers(mapCustomers(customerResult));
-    setLiveTransactionCount(transactionResult.length);
+    const queuedByCustomer = new Map<string, number>();
+    for (const transaction of queuedTransactions) {
+      const amount = Number(transaction.amount) || 0;
+      const signedAmount = transaction.type === "CREDIT" ? amount : -amount;
+      queuedByCustomer.set(
+        transaction.customerId,
+        (queuedByCustomer.get(transaction.customerId) ?? 0) + signedAmount,
+      );
+    }
+    setLiveCustomers(
+      mapCustomers(customerResult).map((customer) => ({
+        ...customer,
+        due: customer.due + (queuedByCustomer.get(customer.id) ?? 0),
+      })),
+    );
+    setLiveTransactionCount(transactionResult.length + queuedTransactions.length);
     const today = new Date().toDateString();
     setLivePaymentToday(
       transactionResult
@@ -360,7 +376,14 @@ function OnboardingContent() {
             transaction.type === "PAYMENT" &&
             new Date(transaction.date).toDateString() === today,
         )
-        .reduce((sum, transaction) => sum + Number(transaction.amount), 0),
+        .reduce((sum, transaction) => sum + Number(transaction.amount), 0) +
+        queuedTransactions
+          .filter(
+            (transaction) =>
+              transaction.type === "PAYMENT" &&
+              new Date(transaction.date).toDateString() === today,
+          )
+          .reduce((sum, transaction) => sum + Number(transaction.amount), 0),
     );
   }, [dispatch]);
 
@@ -382,6 +405,23 @@ function OnboardingContent() {
     return () => {
       window.clearTimeout(timeout);
     };
+  }, [refreshLiveData, user]);
+
+  useEffect(() => {
+    if (!user || !("serviceWorker" in navigator)) return;
+    const handleWorkerMessage = (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type !== "OUTBOX_SYNCED" && event.data?.type !== "OUTBOX_FAILED") {
+        return;
+      }
+      void refreshLiveData().catch((error: unknown) => {
+        setDataError(
+          error instanceof Error ? error.message : "দোকানের তথ্য রিফ্রেশ করা যায়নি",
+        );
+      });
+    };
+    navigator.serviceWorker.addEventListener("message", handleWorkerMessage);
+    return () =>
+      navigator.serviceWorker.removeEventListener("message", handleWorkerMessage);
   }, [refreshLiveData, user]);
 
   const switchView = (v: View) => {
@@ -456,9 +496,10 @@ function OnboardingContent() {
     }
 
     setSaving(true);
+    let queuedOffline = false;
     try {
       if (user) {
-        await dispatch(
+        const transaction = await dispatch(
           createTransactionRecord({
             customerId: target.id,
             type: quickEntry.type,
@@ -466,6 +507,7 @@ function OnboardingContent() {
             note: quickEntry.note.trim() || undefined,
           }),
         ).unwrap();
+        queuedOffline = transaction.pendingSync === true;
         await refreshLiveData();
       } else {
         setDemoCustomers((previous) =>
@@ -489,9 +531,11 @@ function OnboardingContent() {
 
       setQuickEntryOpen(false);
       notify(
-        user
-          ? "লেনদেন খাতায় সংরক্ষণ করা হয়েছে"
-          : "ডেমো লেনদেন যোগ হয়েছে (সার্ভারে সংরক্ষিত হয়নি)",
+        queuedOffline
+          ? "লেনদেনটি অফলাইনে অপেক্ষমাণ আছে; সংযোগ ফিরলে সিঙ্ক হবে।"
+          : user
+            ? "লেনদেন খাতায় সংরক্ষণ করা হয়েছে"
+            : "ডেমো লেনদেন যোগ হয়েছে (সার্ভারে সংরক্ষিত হয়নি)",
       );
       setQuickEntry((previous) => ({ ...previous, amount: "", note: "" }));
     } catch (error) {
