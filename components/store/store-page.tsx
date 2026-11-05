@@ -68,6 +68,7 @@ import {
   type QueuedTransaction,
 } from "@/lib/offline";
 import { AiEntryPanel } from "@/features/ai/components/ai-entry-panel";
+import { useSearchParams } from "next/navigation";
 
 /* ================================================================== */
 /* Types                                                               */
@@ -1291,6 +1292,9 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
   const toastTimer = useRef<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const searchParams = useSearchParams();
+  const remindId = searchParams.get("remind");
+
   const refreshStoreData = useCallback(async () => {
     const [customerResult, transactionResult, queuedTransactions] =
       await Promise.all([
@@ -1380,7 +1384,10 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
     };
     navigator.serviceWorker.addEventListener("message", handleWorkerMessage);
     return () =>
-      navigator.serviceWorker.removeEventListener("message", handleWorkerMessage);
+      navigator.serviceWorker.removeEventListener(
+        "message",
+        handleWorkerMessage,
+      );
   }, [isDemo, refreshStoreData]);
 
   useEffect(() => {
@@ -1908,6 +1915,16 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
     { id: "paid", label: "পরিশোধিত (Paid)", cls: "text-secondary" },
   ];
 
+  useEffect(() => {
+    if (!remindId || !loaded || isDemo) return;
+    const target = customers.find((c) => c.id === remindId);
+    if (!target) return;
+    setSelectedId(target.id);
+    setView("details");
+    notify(`${target.name}-কে বার্তা পাঠাতে “হোয়াটসঅ্যাপে পাঠান” চাপুন`);
+    window.history.replaceState(null, "", "/store"); // refresh won't repeat this
+  }, [remindId, loaded, customers, isDemo, notify]);
+
   /* ================================================================ */
 
   return (
@@ -2005,8 +2022,8 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
             >
               ইন্টারনেট সংযোগ নেই; আগে লোড করা খাতা দেখানো হচ্ছে।
               {pendingTransactionCount > 0 &&
-                ` ${toBn(pendingTransactionCount)} টি লেনদেন সংযোগ ফিরলে সিঙ্ক হবে।`}
-              {" "}নতুন গ্রাহক যোগ করতে ইন্টারনেট লাগবে।
+                ` ${toBn(pendingTransactionCount)} টি লেনদেন সংযোগ ফিরলে সিঙ্ক হবে।`}{" "}
+              নতুন গ্রাহক যোগ করতে ইন্টারনেট লাগবে।
             </div>
           )}
           {/* Breadcrumb */}

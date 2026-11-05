@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { logout, BUSINESS_TYPE_LABELS } from "@/features/auth/authSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
+import { EnableNotifications } from "./pwa/enable-notifications";
+import { disablePush } from "@/lib/push";
 
 export function AccountMenu() {
   const router = useRouter();
@@ -25,6 +27,8 @@ export function AccountMenu() {
 
   const handleLogout = async () => {
     try {
+      await disablePush().catch(() => {});
+      await dispatch(logout()).unwrap();
       await dispatch(logout()).unwrap();
       setOpen(false);
 
@@ -97,6 +101,8 @@ export function AccountMenu() {
                 value={user.phone ?? "মোবাইল নম্বর নেই"}
               />
             </div>
+            <EnableNotifications />
+
             <button
               type="button"
               onClick={handleLogout}
