@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Suspense } from "react";
 import { Toaster } from "sonner";
 import {
   Hind_Siliguri,
@@ -8,7 +7,6 @@ import {
   Geist_Mono,
 } from "next/font/google";
 
-import StoreProvider from "@/app/StoreProvider";
 import SwRegister from "../components/pwa/sw-register";
 import "./globals.css";
 
@@ -19,13 +17,13 @@ const newsreader = Newsreader({
   style: ["normal", "italic"],
 });
 
-const plusJakartaSans = Plus_Jakarta_Sans({
+export const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
-const hindSiliguri = Hind_Siliguri({
+export const hindSiliguri = Hind_Siliguri({
   variable: "--font-hind-siliguri",
   subsets: ["bengali", "latin"],
   weight: ["400", "500", "600", "700"],
@@ -65,15 +63,7 @@ export default function RootLayout({
       className={`${newsreader.variable} ${plusJakartaSans.variable} ${hindSiliguri.variable} ${geistMono.variable} h-full scroll-smooth antialiased`}
     >
       <body className="flex min-h-screen flex-col bg-[#FAF8F5] text-[#232523] selection:bg-forest-900 selection:text-white">
-        <Suspense
-          fallback={
-            <main className="flex min-h-screen items-center justify-center text-sm text-foreground-muted">
-              খাতা লোড হচ্ছে...
-            </main>
-          }
-        >
-          <StoreProvider>{children}</StoreProvider>
-        </Suspense>
+        {children}
         <Toaster position="bottom-right" richColors />
         <SwRegister />
       </body>

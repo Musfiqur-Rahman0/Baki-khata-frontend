@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useAppSelector } from "@/lib/redux/hooks";
 
-export function BrandLogo({ className }: { className?: string }) {
-  const user = useAppSelector((state) => state.auth.user);
-  const isLoggedIn = Boolean(user);
-
+export function BrandLogo({
+  className,
+  href = "/",
+}: {
+  className?: string;
+  href?: string;
+}) {
   return (
     <Link
-      href={isLoggedIn ? "/onbording" : "/"}
+      href={href}
       aria-label="Baki Khata Home"
       className={cn(
         "group flex items-center gap-3 rounded-lg p-1 focus:outline-none focus:ring-2 focus:ring-forest-800",

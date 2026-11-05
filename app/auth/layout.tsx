@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
+import StoreProvider from "../StoreProvider";
 
 export const metadata: Metadata = {
   title: "বাকি খাতা",
@@ -19,7 +21,15 @@ export default function RootLayout({
     <html lang="bn">
       <head></head>
       <body className="bg-surface font-body-md text-on-surface antialiased min-h-screen flex items-center justify-center">
-        {children}
+        <Suspense
+          fallback={
+            <main className="flex min-h-screen items-center justify-center text-sm text-foreground-muted">
+              খাতা লোড হচ্ছে...
+            </main>
+          }
+        >
+          <StoreProvider>{children}</StoreProvider>
+        </Suspense>
       </body>
     </html>
   );

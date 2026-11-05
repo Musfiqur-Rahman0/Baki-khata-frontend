@@ -1919,7 +1919,7 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
       <header className="sticky top-0 left-0 right-0 z-40 border-b border-border bg-background/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <BrandLogo />
+            <BrandLogo href={user ? "/onbording" : "/"} />
             <div className="h-6 w-px bg-surface-hover hidden sm:block" />
           </div>
 
