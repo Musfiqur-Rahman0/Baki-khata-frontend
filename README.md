@@ -50,13 +50,14 @@ From the `baki-khata-frontend` directory:
 npm ci
 ```
 
-Copy `.env.example` to `.env.local`, then configure the API URL:
+Copy `.env.example` to `.env.local`. Keep the API URL same-origin so the
+service worker can queue transactions when the network is unavailable:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+NEXT_PUBLIC_API_URL=/api/v1
 ```
 
-Start the development server:
+Start the backend on port `5000`, then start the development server:
 
 ```sh
 npm run dev
@@ -107,9 +108,9 @@ contract rather than only changing the brand name.
    routes implemented by the companion backend. Review `lib/api/client.ts`
    and the async thunks in `features/` before changing endpoints or response
    types.
-4. **Configure the API URL per environment.** Use local backend URLs in
-   `.env.local` and the new deployed API base URL in the hosting provider's
-   environment settings. Keep `/api/v1` in the value.
+4. **Configure the API URL per environment.** Keep the browser API URL
+   same-origin (`/api/v1`) so service-worker features work. Configure the
+   Next.js rewrite target for the local or deployed backend.
 5. **Keep auth behavior aligned.** Auth relies on credentialed requests and
    backend-issued HTTP-only cookies. The backend must allow the exact frontend
    origin through credentialed CORS and set secure production cookies.

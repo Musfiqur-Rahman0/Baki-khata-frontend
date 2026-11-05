@@ -1,10 +1,14 @@
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/v1").replace(/\/+$/, "");
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "/api/v1").replace(/\/+$/, "");
 let refreshInFlight: Promise<boolean> | null = null;
 
 export type ApiEnvelope<T> = {
   success: boolean;
   data: T;
-  meta?: { pagination?: { page: number; limit: number; total: number; totalPages: number } };
+  meta?: {
+    pagination?: { page: number; limit: number; total: number; totalPages: number };
+    queued?: boolean;
+    requestId?: string;
+  };
   error?: { message?: string };
 };
 
@@ -65,11 +69,17 @@ export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<ApiEnvelope<T>> {
-  let response = await fetchApi(path, options);
+  const headers = new Headers(options.headers);
+  if ((options.method ?? "GET").toUpperCase() === "POST") {
+    headers.set("Idempotency-Key", crypto.randomUUID());
+  }
+  const requestOptions = { ...options, headers };
+
+  let response = await fetchApi(path, requestOptions);
   if (response.status === 401 && path !== "/auth/refresh") {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
-      response = await fetchApi(path, options);
+      response = await fetchApi(path, requestOptions);
     }
   }
 

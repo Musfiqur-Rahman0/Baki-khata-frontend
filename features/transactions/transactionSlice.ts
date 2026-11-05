@@ -2,7 +2,10 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { apiRequest, queryString } from "@/lib/api/client";
 import type { LedgerTransaction } from "@/features/customers/customerSlice";
 
-export type ApiTransaction = LedgerTransaction & { customer?: { id?: string; name: string; phone: string } };
+export type ApiTransaction = LedgerTransaction & {
+  customer?: { id?: string; name: string; phone: string };
+  pendingSync?: boolean;
+};
 export const fetchTransactions = createAsyncThunk(
   "transactions/fetch",
   async (filters: { customerId?: string; type?: "CREDIT" | "PAYMENT"; page?: number; limit?: number } = {}, { rejectWithValue }) => {
@@ -40,7 +43,10 @@ export const createTransactionRecord = createAsyncThunk(
       const response = await apiRequest<ApiTransaction>("/transactions", {
         method: "POST", body: JSON.stringify(input),
       });
-      return response.data;
+      return {
+        ...response.data,
+        pendingSync: response.meta?.queued === true,
+      };
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : "লেনদেন সংরক্ষণ করা যায়নি");
     }

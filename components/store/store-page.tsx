@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { toast as sonnerToast } from "sonner";
 import {
@@ -61,6 +62,11 @@ import {
   createTransactionRecord,
   type ApiTransaction,
 } from "@/features/transactions/transactionSlice";
+import {
+  getQueuedTransactions,
+  retryQueuedTransaction,
+  type QueuedTransaction,
+} from "@/lib/offline";
 import { AiEntryPanel } from "@/features/ai/components/ai-entry-panel";
 
 /* ================================================================== */
@@ -74,6 +80,8 @@ type Tx = {
   type: TxType;
   desc: string;
   amount: number;
+  pendingSync?: boolean;
+  syncError?: string;
 };
 type Customer = {
   id: string;
@@ -108,6 +116,23 @@ const DEMO_STORAGE_KEY = "bakhi-khata:demo-customers:v1";
 const DRAFT_KEY = "bakhi-khata:draft:v1";
 const DEMO_DRAFT_KEY = "bakhi-khata:demo-draft:v1";
 const URGENT_DAYS = 15;
+
+function subscribeToConnection(callback: () => void) {
+  window.addEventListener("online", callback);
+  window.addEventListener("offline", callback);
+  return () => {
+    window.removeEventListener("online", callback);
+    window.removeEventListener("offline", callback);
+  };
+}
+
+function getConnectionStatus() {
+  return navigator.onLine;
+}
+
+function getServerConnectionStatus() {
+  return true;
+}
 
 const TONES = [
   { bg: "bg-due-bg", text: "text-primary" },
@@ -361,6 +386,65 @@ function mapApiCustomers(
   });
 }
 
+function addQueuedTransactions(
+  customers: Customer[],
+  transactions: QueuedTransaction[],
+): Customer[] {
+  const queuedByCustomer = new Map<string, QueuedTransaction[]>();
+  for (const transaction of transactions) {
+    const queued = queuedByCustomer.get(transaction.customerId) ?? [];
+    queued.push(transaction);
+    queuedByCustomer.set(transaction.customerId, queued);
+  }
+
+  return customers.map((customer) => {
+    const queued = queuedByCustomer.get(customer.id);
+    if (!queued?.length) return customer;
+
+    let totalDue = customer.totalDue;
+    let totalCredit = customer.totalCredit ?? 0;
+    let totalPaid = customer.totalPaid ?? 0;
+    let dueSince = customer.dueSince;
+    const history = [...customer.history];
+
+    for (const transaction of queued) {
+      const amount = Number(transaction.amount) || 0;
+      const date = transaction.date.slice(0, 10);
+      if (transaction.type === "CREDIT") {
+        totalDue += amount;
+        totalCredit += amount;
+        dueSince ??= date;
+      } else {
+        totalDue -= amount;
+        totalPaid += amount;
+        if (totalDue <= 0) dueSince = null;
+      }
+      history.push({
+        id: transaction.id,
+        date,
+        type: transaction.type === "CREDIT" ? "due" : "paid",
+        desc:
+          transaction.note?.trim() ||
+          (transaction.type === "CREDIT" ? "বাকি লেনদেন" : "নগদ জমা"),
+        amount,
+        pendingSync: true,
+        syncError: transaction.syncError,
+      });
+    }
+
+    history.sort((a, b) => b.date.localeCompare(a.date));
+    return {
+      ...customer,
+      totalDue,
+      totalCredit,
+      totalPaid,
+      dueSince,
+      creditLimit: Math.max(totalCredit, customer.creditLimit),
+      history,
+    };
+  });
+}
+
 const emptyForm = (mode: Mode = "new_customer"): FormState => ({
   mode,
   name: "",
@@ -442,6 +526,7 @@ function DetailsPanel({
   shopName,
   ownerName,
   isDemo,
+  isOnline,
   flash,
   onOpenForm,
   notify,
@@ -450,6 +535,7 @@ function DetailsPanel({
   shopName: string;
   ownerName: string;
   isDemo: boolean;
+  isOnline: boolean;
   flash: boolean;
   onOpenForm: (mode: Mode, c?: Customer) => void;
   notify: (m: string) => void;
@@ -651,6 +737,28 @@ function DetailsPanel({
                   <p className="font-semibold text-foreground-muted text-[12px]">
                     {fmtDate(h.date)}
                   </p>
+                  {h.pendingSync && (
+                    <div className="text-[11px]">
+                      <p
+                        className={h.syncError ? "text-error" : "text-tertiary"}
+                        role={h.syncError ? "alert" : undefined}
+                      >
+                        {h.syncError
+                          ? `সিঙ্ক ব্যর্থ: ${h.syncError}`
+                          : "ইন্টারনেট এলে সিঙ্ক হবে"}
+                      </p>
+                      {h.syncError && (
+                        <button
+                          type="button"
+                          disabled={!isOnline}
+                          className="font-semibold text-primary underline disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={() => retryQueuedTransaction(h.id)}
+                        >
+                          আবার চেষ্টা করুন
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="text-right flex-shrink-0 ml-2">
@@ -1149,6 +1257,11 @@ function FormPanel({
 function StorePageContent({ isDemo }: { isDemo: boolean }) {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
+  const isOnline = useSyncExternalStore(
+    subscribeToConnection,
+    getConnectionStatus,
+    getServerConnectionStatus,
+  );
   const shopName = isDemo ? "সোনালী বাজার" : (user?.shopName ?? "আপনার দোকান");
   const ownerName = isDemo ? "মোঃ আরিফুল ইসলাম" : (user?.name ?? "দোকানদার");
   const phone = isDemo ? "০১৭১২-৩৪৫৬৭৮" : (user?.phone ?? "মোবাইল নম্বর নেই");
@@ -1166,6 +1279,7 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
   );
   const [loaded, setLoaded] = useState(false);
   const [apiConnected, setApiConnected] = useState(false);
+  const [pendingTransactionCount, setPendingTransactionCount] = useState(0);
   const [selectedId, setSelectedId] = useState(isDemo ? "CUST-001" : "");
   const [view, setView] = useState<View>("details");
   const [filter, setFilter] = useState<Filter>("all");
@@ -1176,6 +1290,23 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
   const [flash, setFlash] = useState(false);
   const toastTimer = useRef<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const refreshStoreData = useCallback(async () => {
+    const [customerResult, transactionResult, queuedTransactions] =
+      await Promise.all([
+        dispatch(fetchAllCustomers()).unwrap(),
+        dispatch(fetchAllTransactions()).unwrap(),
+        getQueuedTransactions(),
+      ]);
+    const mapped = addQueuedTransactions(
+      mapApiCustomers(customerResult, transactionResult),
+      queuedTransactions,
+    );
+    setPendingTransactionCount(queuedTransactions.length);
+    setApiConnected(true);
+    setCustomers(mapped);
+    return mapped;
+  }, [dispatch]);
 
   /* ---- data source: demo uses isolated local data; live store uses the API ---- */
   useEffect(() => {
@@ -1202,14 +1333,8 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
         return;
       }
       try {
-        const [customerResult, transactionResult] = await Promise.all([
-          dispatch(fetchAllCustomers()).unwrap(),
-          dispatch(fetchAllTransactions()).unwrap(),
-        ]);
+        const mapped = await refreshStoreData();
         if (cancelled) return;
-        const mapped = mapApiCustomers(customerResult, transactionResult);
-        setApiConnected(true);
-        setCustomers(mapped);
         setSelectedId((current) =>
           mapped.some((customer) => customer.id === current)
             ? current
@@ -1235,7 +1360,28 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, isDemo]);
+  }, [isDemo, refreshStoreData]);
+
+  useEffect(() => {
+    if (isDemo || !("serviceWorker" in navigator)) return;
+    const handleWorkerMessage = (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === "OUTBOX_SYNCED") {
+        void refreshStoreData().catch((error: unknown) => {
+          console.error("Could not refresh synced ledger data:", error);
+        });
+      } else if (event.data?.type === "OUTBOX_FAILED") {
+        sonnerToast.error(
+          "একটি অফলাইন লেনদেন সংরক্ষণ করা যায়নি। লেনদেনের পাশে কারণটি দেখুন।",
+        );
+        void refreshStoreData().catch((error: unknown) => {
+          console.error("Could not refresh failed ledger data:", error);
+        });
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handleWorkerMessage);
+    return () =>
+      navigator.serviceWorker.removeEventListener("message", handleWorkerMessage);
+  }, [isDemo, refreshStoreData]);
 
   useEffect(() => {
     if (!loaded || !isDemo) return;
@@ -1558,6 +1704,7 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
     let customerId = target?.id;
     let customerCreated = false;
     let transactionCreated = false;
+    let createdTransaction: ApiTransaction | null = null;
 
     try {
       // Step 1: Create the customer, if needed.
@@ -1577,7 +1724,7 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
 
       // Step 2: Create the opening balance or transaction.
       if (customerId && amount > 0) {
-        await dispatch(
+        createdTransaction = await dispatch(
           createTransactionRecord({
             customerId,
             type: isNew || form.mode === "add_due" ? "CREDIT" : "PAYMENT",
@@ -1597,12 +1744,7 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
       // Refresh the data if a customer or transaction may already have
       // been saved, so the UI doesn't incorrectly forget the new record.
       try {
-        const [customerResult, transactionResult] = await Promise.all([
-          dispatch(fetchAllCustomers()).unwrap(),
-          dispatch(fetchAllTransactions()).unwrap(),
-        ]);
-
-        setCustomers(mapApiCustomers(customerResult, transactionResult));
+        await refreshStoreData();
 
         if (customerId) {
           setSelectedId(customerId);
@@ -1631,33 +1773,36 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
     // Step 3: Refresh data separately. A refresh failure should not make
     // an already-saved customer or transaction look like a failed save.
     try {
-      const [customerResult, transactionResult] = await Promise.all([
-        dispatch(fetchAllCustomers()).unwrap(),
-        dispatch(fetchAllTransactions()).unwrap(),
-      ]);
-
-      setCustomers(mapApiCustomers(customerResult, transactionResult));
-      setApiConnected(true);
+      await refreshStoreData();
     } catch {
-      sonnerToast.info(
-        "তথ্য সংরক্ষিত হয়েছে, তবে তালিকা রিফ্রেশ করা যায়নি। পেজ রিফ্রেশ করুন।",
-      );
+      if (!createdTransaction?.pendingSync) {
+        sonnerToast.info(
+          "তথ্য সংরক্ষিত হয়েছে, তবে তালিকা রিফ্রেশ করা যায়নি। পেজ রিফ্রেশ করুন।",
+        );
+      }
     }
 
     if (customerId) {
       setSelectedId(customerId);
     }
 
-    notify(
-      isNew
-        ? `‘${form.name.trim()}’ খাতায় যুক্ত হয়েছেন`
-        : form.mode === "add_due"
-          ? `${money(amount)} বাকি ${target?.name ?? ""}-এর খাতায় যোগ হয়েছে`
-          : `${money(amount)} জমা গৃহীত হয়েছে`,
-    );
+    if (createdTransaction?.pendingSync) {
+      if (smsWindow && !smsWindow.closed) smsWindow.close();
+      sonnerToast.info(
+        "লেনদেনটি ডিভাইসে অপেক্ষমাণ আছে; ইন্টারনেট এলে স্বয়ংক্রিয়ভাবে সিঙ্ক হবে।",
+      );
+    } else {
+      notify(
+        isNew
+          ? `‘${form.name.trim()}’ খাতায় যুক্ত হয়েছেন`
+          : form.mode === "add_due"
+            ? `${money(amount)} বাকি ${target?.name ?? ""}-এর খাতায় যোগ হয়েছে`
+            : `${money(amount)} জমা গৃহীত হয়েছে`,
+      );
+    }
 
     // Step 4: Preserve the existing SMS composer behavior.
-    if (shouldOpenSms) {
+    if (shouldOpenSms && !createdTransaction?.pendingSync) {
       const recipient = intlPhone(
         isNew ? form.phone : (target?.phone ?? form.phone),
       ).replace(/\D/g, "");
@@ -1803,10 +1948,18 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
           </nav>
 
           <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-1 px-3 py-1 rounded-full bg-settled-bg/40">
-              <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+            <div
+              className={`hidden md:flex items-center gap-1 px-3 py-1 rounded-full ${isOnline ? "bg-settled-bg/40" : "bg-due-bg"}`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${isOnline ? "bg-secondary animate-pulse" : "bg-error"}`}
+              />
               <span className="font-semibold text-label-md font-semibold text-settled-fg">
-                ক্লাউড সিঙ্ক চালু
+                {isOnline
+                  ? "ক্লাউড সিঙ্ক চালু"
+                  : pendingTransactionCount
+                    ? `${toBn(pendingTransactionCount)} টি লেনদেন সিঙ্ক অপেক্ষায়`
+                    : "অফলাইন"}
               </span>
             </div>
             {/* <button
@@ -1843,6 +1996,17 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
             <div className="mx-4 mt-4 rounded-xl border border-rolling-fg/20 bg-rolling-bg px-4 py-3 text-sm font-semibold text-rolling-fg sm:mx-6 lg:mx-8">
               আপনি নমুনা দোকান দেখছেন। এখানে করা পরিবর্তন শুধু এই ডেমোতেই থাকবে,
               আর কোনো SMS বা WhatsApp বার্তা পাঠানো হবে না।
+            </div>
+          )}
+          {!isDemo && !isOnline && (
+            <div
+              className="mx-4 mt-4 rounded-xl border border-primary/20 bg-due-bg px-4 py-3 text-sm font-semibold text-primary sm:mx-6 lg:mx-8"
+              role="status"
+            >
+              ইন্টারনেট সংযোগ নেই; আগে লোড করা খাতা দেখানো হচ্ছে।
+              {pendingTransactionCount > 0 &&
+                ` ${toBn(pendingTransactionCount)} টি লেনদেন সংযোগ ফিরলে সিঙ্ক হবে।`}
+              {" "}নতুন গ্রাহক যোগ করতে ইন্টারনেট লাগবে।
             </div>
           )}
           {/* Breadcrumb */}
@@ -1899,7 +2063,7 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
                     </h1>
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 text-on-secondary font-semibold text-label-md">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
-                      লাইভ সিঙ্ক চালু
+                      {isOnline ? "লাইভ সিঙ্ক চালু" : "অফলাইন"}
                     </span>
                   </div>
                   <p className="font-semibold text-white/80 mt-0.5">
@@ -2303,6 +2467,7 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
                   shopName={shopName}
                   ownerName={ownerName}
                   isDemo={isDemo}
+                  isOnline={isOnline}
                   flash={flash}
                   onOpenForm={openForm}
                   notify={notify}

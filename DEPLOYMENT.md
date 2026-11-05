@@ -13,8 +13,10 @@ Configure the frontend Vercel project with:
 API URL relative (`/api/v1`): browser requests then remain on the frontend
 origin, and authentication cookies are first-party instead of cross-site.
 
-For local development, `.env.local` may use
-`NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1`.
+For local development, keep `.env.local` set to
+`NEXT_PUBLIC_API_URL=/api/v1`; the Next.js development rewrite proxies requests
+to `http://localhost:5000`. This same-origin URL is required for the service
+worker to queue transactions while offline.
 
 Redeploy the Vercel project after changing `NEXT_PUBLIC_API_URL`; Next.js
 inlines `NEXT_PUBLIC_*` values at build time. The rewrite is compatible with
@@ -24,6 +26,30 @@ change the app's component caching configuration.
 
 The backend must remain available over HTTPS and allow the deployed frontend
 origin through its credentialed CORS configuration.
+
+## Offline support
+
+The production service worker caches the app shell, Next.js static assets, the
+manifest and icons, plus the signed-in user's customer and transaction GET
+responses. Private cached data is cleared after successful logout and when a
+different account is detected. Cached responses and queued writes are stored
+in the browser's Cache Storage and IndexedDB and are available only on devices
+where they were previously loaded or entered.
+
+Creating a transaction for an already-synced customer while offline adds it to
+the local outbox and marks it as waiting to sync. The outbox retries when the
+connection returns; server-side idempotency keys prevent a retry from
+duplicating a transaction. New customer creation still requires a connection.
+Offline queued transactions do not send SMS or WhatsApp messages before they
+are synced.
+
+Before deploying the backend update, apply the transaction idempotency
+migration with `npx prisma migrate deploy` from `baki-khata-backend`. Deploy the
+backend before deploying the frontend. Keep `NEXT_PUBLIC_API_URL=/api/v1` in
+production so authenticated API requests are same-origin and can be handled by
+the service worker. Offline support is enabled in production builds; test it
+after deployment by loading the store and customer data online, then switching
+the browser to offline mode.
 
 ## Authentication smoke test
 

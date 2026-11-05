@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { apiRequest } from "@/lib/api/client";
+import { cacheAuthenticatedUser } from "@/lib/offline";
 
 export const BUSINESS_TYPES = [
   "GROCERY",
@@ -159,6 +160,7 @@ async function requestAuth(
     throw new Error("সার্ভার থেকে সঠিক ব্যবহারকারীর তথ্য পাওয়া যায়নি।");
   }
 
+  await cacheAuthenticatedUser(responseBody.data.user);
   return responseBody.data.user;
 }
 
@@ -177,6 +179,7 @@ export const loadCurrentUser = createAsyncThunk<
           "সার্ভার থেকে সঠিক ব্যবহারকারীর তথ্য পাওয়া যায়নি।",
         );
       }
+      await cacheAuthenticatedUser(responseBody.data.user);
       return responseBody.data.user;
     } catch (error) {
       return thunkApi.rejectWithValue(
