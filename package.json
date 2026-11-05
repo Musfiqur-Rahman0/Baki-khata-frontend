@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "build:sw": "esbuild sw/index.ts --bundle --minify --outfile=public/sw.js",
+    "dev:sw": "esbuild sw/index.ts --bundle --outfile=public/sw.js --watch",
+    "build": "npm run build:sw && next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -31,6 +32,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
