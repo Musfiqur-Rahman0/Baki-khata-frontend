@@ -225,6 +225,14 @@ async function queueTransactionWhenOffline(request) {
   const headers = new Headers(request.headers);
   const requestId = headers.get("Idempotency-Key") || crypto.randomUUID();
   headers.set("Idempotency-Key", requestId);
+
+  let input;
+  try {
+    input = await request.clone().json();
+  } catch {
+    input = null;
+  }
+
   const keyedRequest = new Request(request, { headers });
 
   try {
@@ -233,13 +241,10 @@ async function queueTransactionWhenOffline(request) {
     return response;
   } catch {
     const userId = await getCachedUserId();
-    if (!userId) return offlineResponse();
-
-    let input;
-    try {
-      input = await request.clone().json();
-    } catch {
-      return offlineResponse();
+    if (!userId) {
+      return offlineResponse(
+        "অফলাইনে লেনদেন সংরক্ষণ করতে আগে অনলাইনে সাইন ইন করুন।",
+      );
     }
     if (
       typeof input?.customerId !== "string" ||
@@ -247,7 +252,9 @@ async function queueTransactionWhenOffline(request) {
       !Number.isFinite(Number(input.amount)) ||
       Number(input.amount) <= 0
     ) {
-      return offlineResponse();
+      return offlineResponse(
+        "লেনদেনের তথ্য পড়া যায়নি। অনলাইনে ফিরে আবার চেষ্টা করুন।",
+      );
     }
 
     const createdAt = new Date().toISOString();
@@ -466,11 +473,13 @@ async function clearOutboxFailure(requestId) {
   await putOutbox(retryable);
 }
 
-function offlineResponse() {
+function offlineResponse(
+  message = "ইন্টারনেট সংযোগ নেই। আবার অনলাইনে চেষ্টা করুন।",
+) {
   return new Response(
     JSON.stringify({
       success: false,
-      error: { message: "ইন্টারনেট সংযোগ নেই। আবার অনলাইনে চেষ্টা করুন।" },
+      error: { message },
     }),
     {
       status: 503,

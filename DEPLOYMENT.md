@@ -13,8 +13,10 @@ Configure the frontend Vercel project with:
 API URL relative (`/api/v1`): browser requests then remain on the frontend
 origin, and authentication cookies are first-party instead of cross-site.
 
-For local development, `.env.local` may use
-`NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1`.
+For local development, keep `.env.local` set to
+`NEXT_PUBLIC_API_URL=/api/v1`; the Next.js development rewrite proxies requests
+to `http://localhost:5000`. This same-origin URL is required for the service
+worker to queue transactions while offline.
 
 Redeploy the Vercel project after changing `NEXT_PUBLIC_API_URL`; Next.js
 inlines `NEXT_PUBLIC_*` values at build time. The rewrite is compatible with

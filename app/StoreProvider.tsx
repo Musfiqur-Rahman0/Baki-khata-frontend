@@ -18,7 +18,7 @@ export default function StoreProvider({ children }: StoreProviderProps) {
   }, [store]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) {
+    if (!("serviceWorker" in navigator)) {
       return;
     }
 

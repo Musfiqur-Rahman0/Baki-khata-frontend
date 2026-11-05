@@ -160,7 +160,7 @@ async function requestAuth(
     throw new Error("সার্ভার থেকে সঠিক ব্যবহারকারীর তথ্য পাওয়া যায়নি।");
   }
 
-  void cacheAuthenticatedUser(responseBody.data.user);
+  await cacheAuthenticatedUser(responseBody.data.user);
   return responseBody.data.user;
 }
 
@@ -179,6 +179,7 @@ export const loadCurrentUser = createAsyncThunk<
           "সার্ভার থেকে সঠিক ব্যবহারকারীর তথ্য পাওয়া যায়নি।",
         );
       }
+      await cacheAuthenticatedUser(responseBody.data.user);
       return responseBody.data.user;
     } catch (error) {
       return thunkApi.rejectWithValue(
