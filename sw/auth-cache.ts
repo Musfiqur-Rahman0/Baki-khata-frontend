@@ -3,7 +3,7 @@ import { AUTH_URL, CACHEABLE_API_PATH, PRIVATE_CACHE } from "./config";
 export async function cacheAuthResponse(response: Response) {
   const payload = await response.clone().json();
 
-  const userId = payload?.data?.id;
+  const userId = payload?.data?.user?.id;
 
   if (typeof userId !== "string") return;
   if (!userId) {
