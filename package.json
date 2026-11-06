@@ -5,7 +5,7 @@
   "scripts": {
     "predev": "npm run build:sw",
     "dev": "next dev",
-    "build:sw": "esbuild sw/index.ts --bundle --minify --outfile=public/sw.js",
+    "build:sw": "esbuild sw/index.ts --bundle --minify --outfile=public/sw.js && esbuild sw/dev.ts --bundle --minify --outfile=public/dev-sw.js",
     "dev:sw": "esbuild sw/index.ts --bundle --outfile=public/sw.js --watch",
     "build": "npm run build:sw && next build",
     "start": "next start",

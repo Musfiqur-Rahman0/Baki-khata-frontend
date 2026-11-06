@@ -42,10 +42,21 @@ export async function getQueuedTransactions(): Promise<QueuedTransaction[]> {
       channel.port1.close();
       reject(new Error("অফলাইন লেনদেনের তালিকা পড়া যায়নি।"));
     }, 3000);
-    channel.port1.onmessage = (event: MessageEvent<QueuedTransaction[]>) => {
+    channel.port1.onmessage = (event: MessageEvent<unknown>) => {
       window.clearTimeout(timeout);
       channel.port1.close();
-      resolve(event.data);
+      if (Array.isArray(event.data)) {
+        resolve(event.data as QueuedTransaction[]);
+        return;
+      }
+      const message =
+        typeof event.data === "object" &&
+        event.data !== null &&
+        "error" in event.data &&
+        typeof event.data.error === "string"
+          ? event.data.error
+          : "অফলাইন লেনদেনের তালিকা পড়া যায়নি।";
+      reject(new Error(message));
     };
     worker.postMessage({ type: "GET_PENDING_TRANSACTIONS" }, [channel.port2]);
   });

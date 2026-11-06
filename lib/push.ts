@@ -24,6 +24,28 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+async function getReadyServiceWorker(): Promise<ServiceWorkerRegistration> {
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(
+          () =>
+            reject(
+              new Error(
+                "নোটিফিকেশন সার্ভিস চালু হতে দেরি হচ্ছে। পৃষ্ঠাটি রিফ্রেশ করে আবার চেষ্টা করুন।",
+              ),
+            ),
+          10000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
+}
+
 export async function getPushStatus(): Promise<PushStatus> {
   if (!isPushSupported()) return "unsupported";
   if (Notification.permission === "denied") return "blocked";
@@ -45,7 +67,7 @@ export async function enablePush(): Promise<void> {
     throw new Error("নোটিফিকেশনের অনুমতি দেওয়া হয়নি।");
   }
 
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await getReadyServiceWorker();
   const subscription =
     (await registration.pushManager.getSubscription()) ??
     (await registration.pushManager.subscribe({

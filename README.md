@@ -55,6 +55,7 @@ service worker can queue transactions when the network is unavailable:
 
 ```env
 NEXT_PUBLIC_API_URL=/api/v1
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=<backend VAPID_PUBLIC_KEY>
 ```
 
 Start the backend on port `5000`, then start the development server:
@@ -62,6 +63,14 @@ Start the backend on port `5000`, then start the development server:
 ```sh
 npm run dev
 ```
+
+Development registers a lightweight service worker that supports push and
+caches authenticated customer and transaction GET responses for offline
+reading, without caching Next.js development assets. Set the matching
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` in the backend
+environment. Offline transaction queuing remains production-only. Cache
+Storage is populated after a successful sign-in and data fetch; clear it by
+logging out or clearing site data in the browser.
 
 Visit <http://localhost:3000>. To verify before deploying:
 
