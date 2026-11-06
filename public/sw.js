@@ -1,1 +1,414 @@
-"use strict";(()=>{var C="baki-khata-v1",f=`${C}-assets`,d=`${C}-pages`,c=`${C}-private`,I="/offline.html",w=["/","/store","/auth","/demo-store","/onbording"],O=[I,"/manifest.webmanifest","/apple-touch-icon.png","/icons/icon-192.png","/icons/icon-512.png","/icons/icon-maskable-512.png","/pwa-icon.svg"],i=new URL("/api/v1/auth/me",self.location.origin).href,y=/^\/api\/v1\/(auth\/me|customers(?:\/.*)?|transactions(?:\/.*)?)$/,x=/^\/api\/v1\/transactions\/?$/;async function m(e){let a=(await e.clone().json())?.data?.user?.id;if(typeof a!="string")return;if(!a){console.error("User ID not found in auth response payload");return}let n=await l();n&&n!==a&&await caches.delete(c),await(await caches.open(c)).put(i,e)}async function l(){let t=await(await caches.open(c)).match(i);if(!t)return null;let n=(await t.json())?.data?.user?.id;return typeof n=="string"?n:null}async function A(){let e=await caches.open(c),t=await e.keys();await Promise.all(t.filter(a=>y.test(new URL(a.url).pathname)&&new URL(a.url).href!==i).map(a=>e.delete(a)))}var B="baki-khata-offline",g="transactions";function F(){return new Promise((e,t)=>{let a=indexedDB.open(B,1);a.onupgradeneeded=()=>{let n=a.result;n.objectStoreNames.contains(g)||n.createObjectStore(g,{keyPath:"requestId"})},a.onsuccess=()=>e(a.result),a.onerror=()=>t(a.error)})}async function S(e,t){let a=await F();return new Promise((n,r)=>{let o=a.transaction(g,e),s=t(o.objectStore(g)),u;s.onsuccess=()=>{u=s.result},s.onerror=()=>r(s.error),o.oncomplete=()=>{a.close(),n(u)},o.onerror=()=>{a.close(),r(o.error)},o.onabort=()=>{a.close(),r(o.error)}})}function p(){return S("readonly",e=>e.getAll())}function R(e){return S("readwrite",t=>t.put(e))}function _(e){return S("readwrite",t=>t.delete(e))}async function U(e,t){let n=(await p()).find(r=>r.requestId===e);n&&await R({...n,failed:t})}async function b(e){let a=(await p()).find(r=>r.requestId===e);if(!a)return;let n={...a};delete n.failed,await R(n)}async function P(e){let t=await self.clients.matchAll({type:"window",includeUncontrolled:!0});for(let a of t)a.postMessage(e)}async function k(){let e=self.registration.sync;if(e)try{await e.register("sync-transactions")}catch(t){console.warn("Background transaction sync could not be registered:",t)}}async function E(){let e=await p();if(!e.length)return;let t;try{t=await fetch(i,{credentials:"include",cache:"no-store"})}catch{return}if(!t.ok)return;let n=(await t.json())?.data?.user?.id;if(typeof n!="string")return;let r=0;for(let o of e){if(o.userId!==n||o.failed)continue;let s;try{s=await fetch("/api/v1/transactions",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Idempotency-Key":o.requestId},body:JSON.stringify(o.input)})}catch{return}if(s.ok){await _(o.requestId),await A(),r+=1;continue}if(s.status>=400&&s.status<500&&s.status!==401&&s.status!==408&&s.status!==429){let h=(await s.json().catch(()=>null))?.error?.message||"\u09B2\u09C7\u09A8\u09A6\u09C7\u09A8\u099F\u09BF \u09B8\u09BE\u09B0\u09CD\u09AD\u09BE\u09B0\u09C7 \u09B8\u0982\u09B0\u0995\u09CD\u09B7\u09A3 \u0995\u09B0\u09BE \u09AF\u09BE\u09AF\u09BC\u09A8\u09BF\u0964";await U(o.requestId,h),await P({type:"OUTBOX_FAILED",requestId:o.requestId,message:h});continue}return}r&&await P({type:"OUTBOX_SYNCED",count:r})}function T(e="\u0987\u09A8\u09CD\u099F\u09BE\u09B0\u09A8\u09C7\u099F \u09B8\u0982\u09AF\u09CB\u0997 \u09A8\u09C7\u0987\u0964 \u0986\u09AC\u09BE\u09B0 \u0985\u09A8\u09B2\u09BE\u0987\u09A8\u09C7 \u099A\u09C7\u09B7\u09CD\u099F\u09BE \u0995\u09B0\u09C1\u09A8\u0964"){return new Response(JSON.stringify({success:!1,error:{message:e}}),{status:503,headers:{"Content-Type":"application/json"}})}async function L(e){try{let t=await fetch(e);return t.ok&&!t.redirected&&w.includes(new URL(e.url).pathname)&&await(await caches.open(d)).put(new URL(e.url).pathname,t.clone()),t}catch{let t=await caches.open(d),a=new URL(e.url).pathname;return await t.match(a)||await caches.match(I)||T()}}async function H(e){try{let t=await fetch(e);return t.ok&&(new URL(e.url).href===i?await m(t.clone()):await l()&&await(await caches.open(c)).put(e,t.clone())),t}catch{return await(await caches.open(c)).match(e)||T()}}async function N(e){let t=await caches.open(f),a=await t.match(e);if(a)return a;let n=await fetch(e);return n.ok&&await t.put(e,n.clone()),n}async function q(e){let t=await fetch(e);return t.ok&&await caches.delete(c),t}async function D(e){let t=new Headers(e.headers),a=t.get("Idempotency-Key")||crypto.randomUUID();t.set("Idempotency-Key",a);let n;try{n=await e.clone().json()}catch{n=null}let r=new Request(e,{headers:t});try{let o=await fetch(r);if(o.ok)try{await A()}catch(s){console.warn("Could not clear cached ledger data:",s)}return o}catch{let o=await l();if(!o)return T("\u0985\u09AB\u09B2\u09BE\u0987\u09A8\u09C7 \u09B2\u09C7\u09A8\u09A6\u09C7\u09A8 \u09B8\u0982\u09B0\u0995\u09CD\u09B7\u09A3 \u0995\u09B0\u09A4\u09C7 \u0986\u0997\u09C7 \u0985\u09A8\u09B2\u09BE\u0987\u09A8\u09C7 \u09B8\u09BE\u0987\u09A8 \u0987\u09A8 \u0995\u09B0\u09C1\u09A8\u0964");if(typeof n?.customerId!="string"||!["CREDIT","PAYMENT"].includes(n.type)||!Number.isFinite(Number(n.amount))||Number(n.amount)<=0)return T("\u09B2\u09C7\u09A8\u09A6\u09C7\u09A8\u09C7\u09B0 \u09A4\u09A5\u09CD\u09AF \u09AA\u09A1\u09BC\u09BE \u09AF\u09BE\u09AF\u09BC\u09A8\u09BF\u0964 \u0985\u09A8\u09B2\u09BE\u0987\u09A8\u09C7 \u09AB\u09BF\u09B0\u09C7 \u0986\u09AC\u09BE\u09B0 \u099A\u09C7\u09B7\u09CD\u099F\u09BE \u0995\u09B0\u09C1\u09A8\u0964");let s=new Date().toISOString(),u={id:`pending-${a}`,customerId:n.customerId,type:n.type,amount:String(n.amount),note:n.note??null,date:n.date??s,createdAt:s,pendingSync:!0};try{await R({requestId:a,userId:o,input:n,transaction:u,createdAt:s})}catch(h){return console.error("Could not save the offline transaction:",h),new Response(JSON.stringify({success:!1,error:{message:"\u09B2\u09C7\u09A8\u09A6\u09C7\u09A8\u099F\u09BF \u09A1\u09BF\u09AD\u09BE\u0987\u09B8\u09C7 \u09B8\u0982\u09B0\u0995\u09CD\u09B7\u09A3 \u0995\u09B0\u09BE \u09AF\u09BE\u09AF\u09BC\u09A8\u09BF\u0964 \u0986\u09AC\u09BE\u09B0 \u099A\u09C7\u09B7\u09CD\u099F\u09BE \u0995\u09B0\u09C1\u09A8\u0964"}}),{status:507,headers:{"Content-Type":"application/json"}})}return await k(),new Response(JSON.stringify({success:!0,data:u,meta:{queued:!0,requestId:a}}),{status:202,headers:{"Content-Type":"application/json"}})}}self.addEventListener("install",e=>{e.waitUntil((async()=>{await(await caches.open(f)).addAll(O);let a=await caches.open(d);await Promise.all(w.map(async n=>{try{let r=await fetch(n);r.ok&&!r.redirected&&await a.put(n,r)}catch(r){console.warn("Could not precache app route:",n,r)}})),await self.skipWaiting()})())});self.addEventListener("activate",e=>{e.waitUntil((async()=>{let t=[f,d,c],a=await caches.keys();await Promise.all(a.filter(n=>n.startsWith("baki-khata-")&&!t.includes(n)).map(n=>caches.delete(n))),await self.clients.claim()})())});self.addEventListener("message",e=>{let t=e.data;if(t?.type==="SYNC_OUTBOX"){e.waitUntil(E());return}if(t?.type==="CLEAR_PRIVATE_DATA"){e.waitUntil(caches.delete(c));return}if(t?.type==="CACHE_AUTH_USER"){e.waitUntil(m(new Response(JSON.stringify({success:!0,data:{user:t.user}}),{headers:{"Content-Type":"application/json"}})));return}if(t?.type==="RETRY_TRANSACTION"){e.waitUntil((async()=>{await b(t.requestId),await E()})());return}t?.type==="GET_PENDING_TRANSACTIONS"&&e.waitUntil((async()=>{let a=await l(),n=a?await p():[];e.ports[0]?.postMessage(n.filter(r=>r.userId===a).map(r=>({...r.transaction,...r.failed?{syncError:r.failed}:{}})))})())});self.addEventListener("sync",e=>{e.tag==="sync-transactions"&&e.waitUntil(E())});self.addEventListener("fetch",e=>{let t=e.request,a=new URL(t.url);if(a.origin===self.location.origin){if(t.method==="POST"&&x.test(a.pathname)){e.respondWith(D(t));return}if(t.method==="POST"&&a.pathname==="/api/v1/auth/logout"){e.respondWith(q(t));return}if(t.method==="GET"){if(y.test(a.pathname)){e.respondWith(H(t));return}if(t.mode==="navigate"){e.respondWith(L(t));return}(a.pathname.startsWith("/_next/static/")||O.includes(a.pathname))&&e.respondWith(N(t))}}});})();
+"use strict";
+(() => {
+  var C = "baki-khata-v1",
+    f = `${C}-assets`,
+    d = `${C}-pages`,
+    c = `${C}-private`,
+    I = "/offline.html",
+    w = ["/", "/store", "/auth", "/demo-store", "/onbording"],
+    O = [
+      I,
+      "/manifest.webmanifest",
+      "/apple-touch-icon.png",
+      "/icons/icon-192.png",
+      "/icons/icon-512.png",
+      "/icons/icon-maskable-512.png",
+      "/pwa-icon.svg",
+    ],
+    i = new URL("/api/v1/auth/me", self.location.origin).href,
+    y = /^\/api\/v1\/(auth\/me|customers(?:\/.*)?|transactions(?:\/.*)?)$/,
+    x = /^\/api\/v1\/transactions\/?$/;
+  async function m(e) {
+    let a = (await e.clone().json())?.data?.user?.id;
+    if (typeof a != "string") return;
+    if (!a) {
+      console.error("User ID not found in auth response payload");
+      return;
+    }
+    let n = await l();
+    (n && n !== a && (await caches.delete(c)),
+      await (await caches.open(c)).put(i, e));
+  }
+  async function l() {
+    let t = await (await caches.open(c)).match(i);
+    if (!t) return null;
+    let n = (await t.json())?.data?.user?.id;
+    return typeof n == "string" ? n : null;
+  }
+  async function A() {
+    let e = await caches.open(c),
+      t = await e.keys();
+    await Promise.all(
+      t
+        .filter(
+          (a) => y.test(new URL(a.url).pathname) && new URL(a.url).href !== i,
+        )
+        .map((a) => e.delete(a)),
+    );
+  }
+  var B = "baki-khata-offline",
+    g = "transactions";
+  function F() {
+    return new Promise((e, t) => {
+      let a = indexedDB.open(B, 1);
+      ((a.onupgradeneeded = () => {
+        let n = a.result;
+        n.objectStoreNames.contains(g) ||
+          n.createObjectStore(g, { keyPath: "requestId" });
+      }),
+        (a.onsuccess = () => e(a.result)),
+        (a.onerror = () => t(a.error)));
+    });
+  }
+  async function S(e, t) {
+    let a = await F();
+    return new Promise((n, r) => {
+      let o = a.transaction(g, e),
+        s = t(o.objectStore(g)),
+        u;
+      ((s.onsuccess = () => {
+        u = s.result;
+      }),
+        (s.onerror = () => r(s.error)),
+        (o.oncomplete = () => {
+          (a.close(), n(u));
+        }),
+        (o.onerror = () => {
+          (a.close(), r(o.error));
+        }),
+        (o.onabort = () => {
+          (a.close(), r(o.error));
+        }));
+    });
+  }
+  function p() {
+    return S("readonly", (e) => e.getAll());
+  }
+  function R(e) {
+    return S("readwrite", (t) => t.put(e));
+  }
+  function _(e) {
+    return S("readwrite", (t) => t.delete(e));
+  }
+  async function U(e, t) {
+    let n = (await p()).find((r) => r.requestId === e);
+    n && (await R({ ...n, failed: t }));
+  }
+  async function b(e) {
+    let a = (await p()).find((r) => r.requestId === e);
+    if (!a) return;
+    let n = { ...a };
+    (delete n.failed, await R(n));
+  }
+  async function P(e) {
+    let t = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: !0,
+    });
+    for (let a of t) a.postMessage(e);
+  }
+  async function k() {
+    let e = self.registration.sync;
+    if (e)
+      try {
+        await e.register("sync-transactions");
+      } catch (t) {
+        console.warn("Background transaction sync could not be registered:", t);
+      }
+  }
+  async function E() {
+    let e = await p();
+    if (!e.length) return;
+    let t;
+    try {
+      t = await fetch(i, { credentials: "include", cache: "no-store" });
+    } catch {
+      return;
+    }
+    if (!t.ok) return;
+    let n = (await t.json())?.data?.user?.id;
+    if (typeof n != "string") return;
+    let r = 0;
+    for (let o of e) {
+      if (o.userId !== n || o.failed) continue;
+      let s;
+      try {
+        s = await fetch("/api/v1/transactions", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": o.requestId,
+          },
+          body: JSON.stringify(o.input),
+        });
+      } catch {
+        return;
+      }
+      if (s.ok) {
+        (await _(o.requestId), await A(), (r += 1));
+        continue;
+      }
+      if (
+        s.status >= 400 &&
+        s.status < 500 &&
+        s.status !== 401 &&
+        s.status !== 408 &&
+        s.status !== 429
+      ) {
+        let h =
+          (await s.json().catch(() => null))?.error?.message ||
+          "\u09B2\u09C7\u09A8\u09A6\u09C7\u09A8\u099F\u09BF \u09B8\u09BE\u09B0\u09CD\u09AD\u09BE\u09B0\u09C7 \u09B8\u0982\u09B0\u0995\u09CD\u09B7\u09A3 \u0995\u09B0\u09BE \u09AF\u09BE\u09AF\u09BC\u09A8\u09BF\u0964";
+        (await U(o.requestId, h),
+          await P({
+            type: "OUTBOX_FAILED",
+            requestId: o.requestId,
+            message: h,
+          }));
+        continue;
+      }
+      return;
+    }
+    r && (await P({ type: "OUTBOX_SYNCED", count: r }));
+  }
+  function T(
+    e = "\u0987\u09A8\u09CD\u099F\u09BE\u09B0\u09A8\u09C7\u099F \u09B8\u0982\u09AF\u09CB\u0997 \u09A8\u09C7\u0987\u0964 \u0986\u09AC\u09BE\u09B0 \u0985\u09A8\u09B2\u09BE\u0987\u09A8\u09C7 \u099A\u09C7\u09B7\u09CD\u099F\u09BE \u0995\u09B0\u09C1\u09A8\u0964",
+  ) {
+    return new Response(
+      JSON.stringify({ success: !1, error: { message: e } }),
+      { status: 503, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  async function L(e) {
+    try {
+      let t = await fetch(e);
+      return (
+        t.ok &&
+          !t.redirected &&
+          w.includes(new URL(e.url).pathname) &&
+          (await (
+            await caches.open(d)
+          ).put(new URL(e.url).pathname, t.clone())),
+        t
+      );
+    } catch {
+      let t = await caches.open(d),
+        a = new URL(e.url).pathname;
+      return (await t.match(a)) || (await caches.match(I)) || T();
+    }
+  }
+  async function H(e) {
+    try {
+      let t = await fetch(e);
+      return (
+        t.ok &&
+          (new URL(e.url).href === i
+            ? await m(t.clone())
+            : (await l()) && (await (await caches.open(c)).put(e, t.clone()))),
+        t
+      );
+    } catch {
+      return (await (await caches.open(c)).match(e)) || T();
+    }
+  }
+  async function N(e) {
+    let t = await caches.open(f),
+      a = await t.match(e);
+    if (a) return a;
+    let n = await fetch(e);
+    return (n.ok && (await t.put(e, n.clone())), n);
+  }
+  async function q(e) {
+    let t = await fetch(e);
+    return (t.ok && (await caches.delete(c)), t);
+  }
+  async function D(e) {
+    let t = new Headers(e.headers),
+      a = t.get("Idempotency-Key") || crypto.randomUUID();
+    t.set("Idempotency-Key", a);
+    let n;
+    try {
+      n = await e.clone().json();
+    } catch {
+      n = null;
+    }
+    let r = new Request(e, { headers: t });
+    try {
+      let o = await fetch(r);
+      if (o.ok)
+        try {
+          await A();
+        } catch (s) {
+          console.warn("Could not clear cached ledger data:", s);
+        }
+      return o;
+    } catch {
+      let o = await l();
+      if (!o)
+        return T(
+          "\u0985\u09AB\u09B2\u09BE\u0987\u09A8\u09C7 \u09B2\u09C7\u09A8\u09A6\u09C7\u09A8 \u09B8\u0982\u09B0\u0995\u09CD\u09B7\u09A3 \u0995\u09B0\u09A4\u09C7 \u0986\u0997\u09C7 \u0985\u09A8\u09B2\u09BE\u0987\u09A8\u09C7 \u09B8\u09BE\u0987\u09A8 \u0987\u09A8 \u0995\u09B0\u09C1\u09A8\u0964",
+        );
+      if (
+        typeof n?.customerId != "string" ||
+        !["CREDIT", "PAYMENT"].includes(n.type) ||
+        !Number.isFinite(Number(n.amount)) ||
+        Number(n.amount) <= 0
+      )
+        return T(
+          "\u09B2\u09C7\u09A8\u09A6\u09C7\u09A8\u09C7\u09B0 \u09A4\u09A5\u09CD\u09AF \u09AA\u09A1\u09BC\u09BE \u09AF\u09BE\u09AF\u09BC\u09A8\u09BF\u0964 \u0985\u09A8\u09B2\u09BE\u0987\u09A8\u09C7 \u09AB\u09BF\u09B0\u09C7 \u0986\u09AC\u09BE\u09B0 \u099A\u09C7\u09B7\u09CD\u099F\u09BE \u0995\u09B0\u09C1\u09A8\u0964",
+        );
+      let s = new Date().toISOString(),
+        u = {
+          id: `pending-${a}`,
+          customerId: n.customerId,
+          type: n.type,
+          amount: String(n.amount),
+          note: n.note ?? null,
+          date: n.date ?? s,
+          createdAt: s,
+          pendingSync: !0,
+        };
+      try {
+        await R({
+          requestId: a,
+          userId: o,
+          input: n,
+          transaction: u,
+          createdAt: s,
+        });
+      } catch (h) {
+        return (
+          console.error("Could not save the offline transaction:", h),
+          new Response(
+            JSON.stringify({
+              success: !1,
+              error: {
+                message:
+                  "\u09B2\u09C7\u09A8\u09A6\u09C7\u09A8\u099F\u09BF \u09A1\u09BF\u09AD\u09BE\u0987\u09B8\u09C7 \u09B8\u0982\u09B0\u0995\u09CD\u09B7\u09A3 \u0995\u09B0\u09BE \u09AF\u09BE\u09AF\u09BC\u09A8\u09BF\u0964 \u0986\u09AC\u09BE\u09B0 \u099A\u09C7\u09B7\u09CD\u099F\u09BE \u0995\u09B0\u09C1\u09A8\u0964",
+              },
+            }),
+            { status: 507, headers: { "Content-Type": "application/json" } },
+          )
+        );
+      }
+      return (
+        await k(),
+        new Response(
+          JSON.stringify({
+            success: !0,
+            data: u,
+            meta: { queued: !0, requestId: a },
+          }),
+          { status: 202, headers: { "Content-Type": "application/json" } },
+        )
+      );
+    }
+  }
+  self.addEventListener("install", (e) => {
+    e.waitUntil(
+      (async () => {
+        await (await caches.open(f)).addAll(O);
+        let a = await caches.open(d);
+        (await Promise.all(
+          w.map(async (n) => {
+            try {
+              let r = await fetch(n);
+              r.ok && !r.redirected && (await a.put(n, r));
+            } catch (r) {
+              console.warn("Could not precache app route:", n, r);
+            }
+          }),
+        ),
+          await self.skipWaiting());
+      })(),
+    );
+  });
+  self.addEventListener("activate", (e) => {
+    e.waitUntil(
+      (async () => {
+        let t = [f, d, c],
+          a = await caches.keys();
+        (await Promise.all(
+          a
+            .filter((n) => n.startsWith("baki-khata-") && !t.includes(n))
+            .map((n) => caches.delete(n)),
+        ),
+          await self.clients.claim());
+      })(),
+    );
+  });
+  self.addEventListener("message", (e) => {
+    let t = e.data;
+    if (t?.type === "SYNC_OUTBOX") {
+      e.waitUntil(E());
+      return;
+    }
+    if (t?.type === "CLEAR_PRIVATE_DATA") {
+      e.waitUntil(caches.delete(c));
+      return;
+    }
+    if (t?.type === "CACHE_AUTH_USER") {
+      e.waitUntil(
+        m(
+          new Response(
+            JSON.stringify({ success: !0, data: { user: t.user } }),
+            { headers: { "Content-Type": "application/json" } },
+          ),
+        ),
+      );
+      return;
+    }
+    if (t?.type === "RETRY_TRANSACTION") {
+      e.waitUntil(
+        (async () => {
+          (await b(t.requestId), await E());
+        })(),
+      );
+      return;
+    }
+    t?.type === "GET_PENDING_TRANSACTIONS" &&
+      e.waitUntil(
+        (async () => {
+          let a = await l(),
+            n = a ? await p() : [];
+          e.ports[0]?.postMessage(
+            n
+              .filter((r) => r.userId === a)
+              .map((r) => ({
+                ...r.transaction,
+                ...(r.failed ? { syncError: r.failed } : {}),
+              })),
+          );
+        })(),
+      );
+  });
+  self.addEventListener("sync", (e) => {
+    e.tag === "sync-transactions" && e.waitUntil(E());
+  });
+  self.addEventListener("fetch", (e) => {
+    let t = e.request,
+      a = new URL(t.url);
+    if (a.origin === self.location.origin) {
+      if (t.method === "POST" && x.test(a.pathname)) {
+        e.respondWith(D(t));
+        return;
+      }
+      if (t.method === "POST" && a.pathname === "/api/v1/auth/logout") {
+        e.respondWith(q(t));
+        return;
+      }
+      if (t.method === "GET") {
+        if (y.test(a.pathname)) {
+          e.respondWith(H(t));
+          return;
+        }
+        if (t.mode === "navigate") {
+          e.respondWith(L(t));
+          return;
+        }
+        (a.pathname.startsWith("/_next/static/") || O.includes(a.pathname)) &&
+          e.respondWith(N(t));
+      }
+    }
+  });
+})();
