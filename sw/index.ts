@@ -1,3 +1,5 @@
+import "./push";
+
 import {
   APP_ROUTES,
   ASSET_CACHE,
