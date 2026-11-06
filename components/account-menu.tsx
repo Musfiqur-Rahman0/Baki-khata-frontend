@@ -29,7 +29,6 @@ export function AccountMenu() {
     try {
       await disablePush().catch(() => {});
       await dispatch(logout()).unwrap();
-      await dispatch(logout()).unwrap();
       setOpen(false);
 
       toast.success("সফলভাবে লগআউট হয়েছে");
