@@ -18,6 +18,12 @@ For local development, keep `.env.local` set to
 to `http://localhost:5000`. This same-origin URL is required for the service
 worker to queue transactions while offline.
 
+If running a local production server with `npm start`, set
+`API_ORIGIN=http://localhost:5000` in `.env.local` as well. `next start` runs
+with `NODE_ENV=production`, so this override keeps its API rewrite pointed at
+the local backend instead of the production backend. Do not set this override
+in the Vercel production environment.
+
 Redeploy the Vercel project after changing `NEXT_PUBLIC_API_URL`; Next.js
 inlines `NEXT_PUBLIC_*` values at build time. The rewrite is compatible with
 the current Next.js 16 configuration, including `cacheComponents: true` and

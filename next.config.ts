@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
 
-const apiOrigin =
-  process.env.NODE_ENV === "development"
+const apiOrigin = (
+  process.env.API_ORIGIN ??
+  (process.env.NODE_ENV === "development"
     ? "http://localhost:5000"
-    : "https://baki-khata-backend.onrender.com";
+    : "https://baki-khata-backend.onrender.com")
+).replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
   async rewrites() {

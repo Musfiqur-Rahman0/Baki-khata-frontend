@@ -1,11 +1,19 @@
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "/api/v1").replace(/\/+$/, "");
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "/api/v1").replace(
+  /\/+$/,
+  "",
+);
 let refreshInFlight: Promise<boolean> | null = null;
 
 export type ApiEnvelope<T> = {
   success: boolean;
   data: T;
   meta?: {
-    pagination?: { page: number; limit: number; total: number; totalPages: number };
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
     queued?: boolean;
     requestId?: string;
   };
@@ -43,10 +51,7 @@ async function refreshAccessToken(): Promise<boolean> {
   return refreshInFlight;
 }
 
-async function fetchApi(
-  path: string,
-  options: RequestInit,
-): Promise<Response> {
+async function fetchApi(path: string, options: RequestInit): Promise<Response> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -91,12 +96,17 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok || payload.success !== true) {
-    throw new Error(payload.error?.message ?? "অনুরোধটি সম্পন্ন করা যায়নি। আবার চেষ্টা করুন।");
+    throw new Error(
+      payload.error?.message ??
+        "অনুরোধটি সম্পন্ন করা যায়নি। আবার চেষ্টা করুন।",
+    );
   }
   return payload;
 }
 
-export function queryString(values: Record<string, string | number | boolean | undefined>) {
+export function queryString(
+  values: Record<string, string | number | boolean | undefined>,
+) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
     if (value !== undefined && value !== "") params.set(key, String(value));
