@@ -49,6 +49,7 @@ import {
 
 import { BrandLogo } from "@/components/brand-logo";
 import { AccountMenu } from "@/components/account-menu";
+import { CustomerCard } from "@/components/store/castomer-card";
 import { BUSINESS_TYPE_LABELS } from "@/features/auth/authSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
@@ -193,7 +194,7 @@ const dueText = (c: Customer) => {
     : `${toBn(d)} দিন বাকি`;
 };
 
-const initialOf = (name: string) => {
+export const initialOf = (name: string) => {
   const t = name.trim();
   if (!t) return "?";
   try {
@@ -2294,108 +2295,24 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
                       </button>
                     </div>
                   ) : (
-                    filtered.map((c) => {
-                      const sel = c.id === selectedId && view === "details";
-                      const st = statusOf(c);
-                      const tone = TONES[c.tone % 4];
-                      return (
-                        <div
-                          key={c.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => {
-                            setSelectedId(c.id);
-                            setView("details");
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              setSelectedId(c.id);
-                              setView("details");
-                            }
-                          }}
-                          className={`px-3 py-3.5 hover:bg-background/70 cursor-pointer flex items-center justify-between transition-all border-l-4 ${
-                            sel
-                              ? "bg-due-bg/30 border-primary shadow-sm"
-                              : "border-transparent"
-                          }`}
-                        >
-                          <div className="w-5/12 flex items-center gap-2 min-w-0">
-                            <div
-                              className={`w-10 h-10 rounded-full ${tone.bg} ${tone.text} flex items-center justify-center font-bold font-semibold flex-shrink-0`}
-                            >
-                              {initialOf(c.name)}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <h4 className="font-semibold text-title-lg text-foreground font-semibold truncate leading-tight">
-                                  {c.name}
-                                </h4>
-                                {sel && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
-                                )}
-                              </div>
-                              <p className="font-semibold text-label-md text-foreground-muted truncate">
-                                {c.phone} • {c.address}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="w-3/12 text-right">
-                            <span
-                              className={`font-semibold text-headline-md font-bold block leading-none ${c.totalDue > 0 ? "text-primary" : "text-secondary"}`}
-                            >
-                              {money(c.totalDue)}
-                            </span>
-                            <span
-                              className={`text-label-md inline-block mt-0.5 ${st === "urgent" ? "text-error font-bold" : st === "paid" ? "text-secondary font-semibold" : "text-foreground-muted"}`}
-                            >
-                              {dueText(c)}
-                            </span>
-                          </div>
-                          <div
-                            className="w-4/12 flex items-center justify-end gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {c.totalDue > 0 ? (
-                              <>
-                                <button
-                                  onClick={() => rowAction("sms", c)}
-                                  title={
-                                    isDemo
-                                      ? "ডেমো মোডে বার্তা পাঠানো বন্ধ"
-                                      : "SMS তাগাদা পাঠান"
-                                  }
-                                  className={`px-2 py-1 rounded-full bg-surface-muted text-settled-fg hover:bg-surface-muted text-label-md font-bold flex items-center gap-1 transition-all ${isDemo ? "opacity-70" : ""}`}
-                                >
-                                  <Icon name="sms" className="text-[14px]" />
-                                  <span>তাগাদা</span>
-                                </button>
-                                <button
-                                  onClick={() => rowAction("pay", c)}
-                                  className="px-2 py-1 rounded-full bg-settled-bg/60 text-secondary text-label-md font-bold hover:bg-settled-bg transition-all"
-                                >
-                                  জমা
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => rowAction("statement", c)}
-                                  className="px-2 py-1 rounded-full bg-surface-muted hover:bg-surface-muted text-foreground text-label-md font-semibold transition-all"
-                                >
-                                  বিবরণী
-                                </button>
-                                <button
-                                  onClick={() => rowAction("add-due", c)}
-                                  className="px-2 py-1 rounded-full bg-due-bg text-primary text-label-md font-bold hover:bg-due-bg transition-all"
-                                >
-                                  + বাকি দিন
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
+                    filtered.map((c) => (
+                      <CustomerCard
+                        key={c.id}
+                        customer={c}
+                        initial={initialOf(c.name)}
+                        amount={money(c.totalDue)}
+                        dueLabel={dueText(c)}
+                        status={statusOf(c)}
+                        tone={TONES[c.tone % 4]}
+                        selected={c.id === selectedId && view === "details"}
+                        isDemo={isDemo}
+                        onSelect={() => {
+                          setSelectedId(c.id);
+                          setView("details");
+                        }}
+                        onAction={(action) => rowAction(action, c)}
+                      />
+                    ))
                   )}
                 </div>
 
