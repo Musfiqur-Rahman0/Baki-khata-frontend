@@ -33,6 +33,7 @@ export const CustomerCard = ({
   onSelect,
   onAction,
 }: CustomerCardProps) => {
+  console.log("due lebel", dueLabel, status, customer.totalDue);
   return (
     <div
       role="button"

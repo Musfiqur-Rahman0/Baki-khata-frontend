@@ -1,4 +1,4 @@
-import type { Customer, FormState } from "./store-types";
+import type { Customer, FormState, Tx } from "./store-types";
 
 export const URGENT_DAYS = 15;
 
@@ -28,6 +28,31 @@ const localISO = (d: Date) =>
 export const todayISO = () => localISO(new Date());
 export const daysAgoISO = (n: number) =>
   localISO(new Date(Date.now() - n * 86400000));
+
+
+export const getDueSinceFromTransactions = (
+  transactions: readonly Pick<Tx, "date" | "type" | "amount">[],
+) => {
+  const oldestFirst = [...transactions].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+  let balance = 0;
+  let dueSince: string | null = null;
+
+  for (const transaction of oldestFirst) {
+    const previousBalance = balance;
+    balance +=
+      transaction.type === "due" ? transaction.amount : -transaction.amount;
+
+    if (balance <= 0) {
+      dueSince = null;
+    } else if (previousBalance <= 0) {
+      dueSince = transaction.date;
+    }
+  }
+
+  return dueSince;
+};
 const daysSince = (iso: string | null) => {
   if (!iso) return 0;
   const a = new Date(iso + "T00:00:00").getTime();

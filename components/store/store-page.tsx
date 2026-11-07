@@ -29,6 +29,7 @@ import {
   dueText,
   emptyForm,
   formatPhone,
+  getDueSinceFromTransactions,
   intlPhone,
   listen,
   money,
@@ -53,10 +54,7 @@ import {
   createTransactionRecord,
   type ApiTransaction,
 } from "@/features/transactions/transactionSlice";
-import {
-  getQueuedTransactions,
-  type QueuedTransaction,
-} from "@/lib/offline";
+import { getQueuedTransactions, type QueuedTransaction } from "@/lib/offline";
 import { useSearchParams } from "next/navigation";
 
 const DEMO_STORAGE_KEY = "bakhi-khata:demo-customers:v1";
@@ -185,9 +183,6 @@ function mapApiCustomers(
     );
     const totalDue = Number(balance.due) || 0;
     const creditTotal = Number(balance.creditTotal) || 0;
-    const oldestUnpaidCredit = [...history]
-      .filter((item) => item.type === "due")
-      .sort((a, b) => a.date.localeCompare(b.date))[0];
     return {
       id: customer.id,
       name: customer.name,
@@ -197,7 +192,7 @@ function mapApiCustomers(
       totalDue,
       totalCredit: Number(balance.creditTotal) || 0,
       totalPaid: Number(balance.paymentTotal) || 0,
-      dueSince: totalDue > 0 ? (oldestUnpaidCredit?.date ?? null) : null,
+      dueSince: totalDue > 0 ? getDueSinceFromTransactions(history) : null,
       tone: index % 4,
       notes: customer.note || "",
       history,
@@ -457,6 +452,8 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
     });
   }, [customers, filter, query]);
 
+  console.log("filtered customer", filtered);
+
   useEffect(() => {
     if (isDemo || !selectedId) return;
     let cancelled = false;
@@ -491,10 +488,7 @@ function StorePageContent({ isDemo }: { isDemo: boolean }) {
                   ),
                   dueSince:
                     Number(ledger.balance.due) > 0
-                      ? ([...history]
-                          .filter((transaction) => transaction.type === "due")
-                          .sort((a, b) => a.date.localeCompare(b.date))[0]
-                          ?.date ?? null)
+                      ? getDueSinceFromTransactions(history)
                       : null,
                 },
           ),

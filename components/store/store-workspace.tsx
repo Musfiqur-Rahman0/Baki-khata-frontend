@@ -1,11 +1,19 @@
 import type { RefObject } from "react";
-import { CustomerCard } from "./castomer-card";
+
 import { DetailsPanel } from "./customer-details-panel";
 import { FormPanel } from "./customer-form-panel";
 import { Icon } from "./store-icon";
 import { AiEntryPanel } from "@/features/ai/components/ai-entry-panel";
 import type { Customer, Filter, FormState, Mode, View } from "./store-types";
-import { dueText, initialOf, money, statusOf, toBn, TONES } from "./store-utils";
+import {
+  dueText,
+  initialOf,
+  money,
+  statusOf,
+  toBn,
+  TONES,
+} from "./store-utils";
+import { CustomerCard } from "./customer-card";
 
 type FilterChip = { id: Filter; label: string; cls: string };
 type Action = "sms" | "pay" | "statement" | "add-due";
